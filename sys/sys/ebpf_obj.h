@@ -18,11 +18,11 @@
 
 #pragma once
 
-#include "ebpf_dev_platform.h"
-#include <dev/ebpf/ebpf_map.h>
-#include <dev/ebpf/ebpf_prog.h>
-#include <sys/ebpf.h>
+#include <dev/ebpf_dev/ebpf_dev_platform.h>
 #include <sys/ebpf_dev.h>
+
+/* Accessor for the container of an object. */
+#define EO2C(eo)	(((eo) != NULL) ? (void *)&(eo)[1] : NULL)
 
 enum ebpf_obj_type {
 	EBPF_OBJ_TYPE_PROG = 0,
@@ -33,21 +33,8 @@ enum ebpf_obj_type {
 struct ebpf_obj {
 	uint16_t type;
 	ebpf_file_t *f;
+	void (*dtor)(struct ebpf_obj *, ebpf_thread_t *);
 };
 
-struct ebpf_obj_map {
-	struct ebpf_map map;
-	struct ebpf_obj obj;
-};
-
-#define EBPF_OBJ_PROG_MAX_ATTACHED_MAPS EBPF_DEV_PROG_MAX_ATTACHED_MAPS
-struct ebpf_obj_prog {
-	struct ebpf_prog prog;
-	struct ebpf_obj obj;
-	struct ebpf_obj_map *attached_maps[EBPF_PROG_MAX_ATTACHED_MAPS];
-	uint16_t nattached_maps;
-};
-
-void *ebpf_obj_container_of(struct ebpf_obj *obj);
-void *ebpf_objfile_get_container(ebpf_file_t *fp);
-void ebpf_obj_delete(struct ebpf_obj *obj, ebpf_thread_t *td);
+struct ebpf_obj *ebpf_obj_data(ebpf_file_t *);
+void ebpf_obj_delete(struct ebpf_obj *, ebpf_thread_t *);
