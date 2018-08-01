@@ -408,7 +408,7 @@ hashtable_map_update_elem(struct ebpf_obj *eo, void *key, void *value,
 err0:
 	BUCKET_UNLOCK_HASH(mht, hash);
 	EBPF_DPRINTF("%s: leave %p key=%u value=%u\n",
-	    __func__, m, *(uint32_t *)key, *(uint32_t *)value);
+	    __func__, EO2EMAP(eo), *(uint32_t *)key, *(uint32_t *)value);
 	return error;
 }
 
