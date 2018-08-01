@@ -1,5 +1,6 @@
 PROG=	all_tests
-OBJS=	$(map_tests) $(prog_tests) $(GTESTOBJS)
+SRCS=	$(map_tests)
+OBJS=	$(map_tests:%.cpp=.o) $(GTESTOBJS)
 CXXFLAGS+= \
 	-I $(BASE)/sys \
 	-I $(LIBEBPFDIR) \
@@ -11,19 +12,25 @@ LDFLAGS+=-coverage
 LIBS=	-lpthread -lebpf -L${LIBEBPFDIR}
 
 map_tests = \
-	map_create_test.o \
-	map_lookup_test.o \
-	map_update_test.o \
-	map_delete_test.o \
-	map_get_next_key_test.o \
-	array_map_delete_test.o \
-	array_map_get_next_key_test.o \
-	array_map_lookup_test.o \
-	array_map_update_test.o \
-	percpu_array_map_delete_test.o \
-	percpu_array_map_get_next_key_test.o \
-	percpu_array_map_lookup_test.o \
-	percpu_array_map_update_test.o
+	map_create_test.cpp \
+	map_lookup_test.cpp \
+	map_update_test.cpp \
+	map_delete_test.cpp \
+	map_get_next_key_test.cpp \
+	array_map_delete_test.cpp \
+	array_map_get_next_key_test.cpp \
+	array_map_lookup_test.cpp \
+	array_map_update_test.cpp \
+	percpu_array_map_delete_test.cpp \
+	percpu_array_map_get_next_key_test.cpp \
+	percpu_array_map_lookup_test.cpp \
+	percpu_array_map_update_test.cpp
+
+map_tests_not_ready = \
+	hashtable_map_delete_test.cpp \
+	hashtable_map_get_next_key_test.cpp \
+	hashtable_map_lookup_test.cpp \
+	hashtable_map_update_test.cpp
 
 all: $(PROG)
 $(PROG): $(OBJS) ${LIBEBPF}

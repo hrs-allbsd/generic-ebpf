@@ -10,8 +10,7 @@ TEST(MapCreateTest, CreateWithNULLMapPointer)
 {
 	int error;
 
-	error = ebpf_map_init(NULL, EBPF_MAP_TYPE_ARRAY, sizeof(uint32_t),
-			      sizeof(uint32_t), 100, 0);
+	error = ebpf_map_init(NULL);
 
 	EXPECT_EQ(EINVAL, error);
 }
@@ -19,21 +18,47 @@ TEST(MapCreateTest, CreateWithNULLMapPointer)
 TEST(MapCreateTest, CreateWithInvalidMapType1)
 {
 	int error;
-	struct ebpf_map map;
+	struct ebpf_obj_map eom;
+	struct ebpf_obj *eo;
+	struct ebpf_map *m;
 
-	error = ebpf_map_init(&map, __EBPF_MAP_TYPE_MAX, sizeof(uint32_t),
-			      sizeof(uint32_t), 100, 0);
+	eo = (struct ebpf_obj *)&eom;
+	*eo = (struct ebpf_obj){
+		.type = EBPF_OBJ_TYPE_MAP,
+	};
+	m = EO2EMAP(eo);
+	*m = (struct ebpf_map){
+		.type = __EBPF_MAP_TYPE_MAX,
+		.key_size = sizeof(uint32_t),
+		.value_size =  sizeof(uint32_t),
+		.max_entries = 100,
+		.map_flags = 0,
+	};
 
+	error = ebpf_map_init(eo);
 	EXPECT_EQ(EINVAL, error);
 }
 
 TEST(MapCreateTest, CreateWithInvalidMapType2)
 {
 	int error;
-	struct ebpf_map map;
+	struct ebpf_obj_map eom;
+	struct ebpf_obj *eo;
+	struct ebpf_map *m;
 
-	error = ebpf_map_init(&map, __EBPF_MAP_TYPE_MAX + 1, sizeof(uint32_t),
-			      sizeof(uint32_t), 100, 0);
+	eo = (struct ebpf_obj *)&eom;
+	*eo = (struct ebpf_obj){
+		.type = EBPF_OBJ_TYPE_MAP,
+	};
+	m = EO2EMAP(eo);
+	*m = (struct ebpf_map){
+		.type = __EBPF_MAP_TYPE_MAX + 1,
+		.key_size = sizeof(uint32_t),
+		.value_size = sizeof(uint32_t),
+		.max_entries = 100,
+		.map_flags = 0,
+	};
+	error = ebpf_map_init(eo);
 
 	EXPECT_EQ(EINVAL, error);
 }
@@ -41,32 +66,68 @@ TEST(MapCreateTest, CreateWithInvalidMapType2)
 TEST(MapCreateTest, CreateWithZeroKey)
 {
 	int error;
-	struct ebpf_map map;
+	struct ebpf_obj_map eom;
+	struct ebpf_obj *eo;
+	struct ebpf_map *m;
 
-	error = ebpf_map_init(&map, EBPF_MAP_TYPE_ARRAY, 0, sizeof(uint32_t),
-			      100, 0);
-
+	eo = (struct ebpf_obj *)&eom;
+	*eo = (struct ebpf_obj){
+		.type = EBPF_OBJ_TYPE_MAP,
+	};
+	m = EO2EMAP(eo);
+	*m = (struct ebpf_map){
+		.type = EBPF_MAP_TYPE_ARRAY,
+		.key_size = 0,
+		.value_size = sizeof(uint32_t),
+		.max_entries = 100,
+		.map_flags = 0,
+	};
+	error = ebpf_map_init(eo);
 	EXPECT_EQ(EINVAL, error);
 }
 
 TEST(MapCreateTest, CreateWithZeroValue)
 {
 	int error;
-	struct ebpf_map map;
+	struct ebpf_obj_map eom;
+	struct ebpf_obj *eo;
+	struct ebpf_map *m;
 
-	error = ebpf_map_init(&map, EBPF_MAP_TYPE_ARRAY, sizeof(uint32_t), 0,
-			      100, 0);
-
+	eo = (struct ebpf_obj *)&eom;
+	*eo = (struct ebpf_obj){
+		.type = EBPF_OBJ_TYPE_MAP,
+	};
+	m = EO2EMAP(eo);
+	*m = (struct ebpf_map){
+		.type = EBPF_MAP_TYPE_ARRAY,
+		.key_size = sizeof(uint32_t),
+		.value_size = 0,
+		.max_entries = 100,
+		.map_flags = 0,
+	};
+	error = ebpf_map_init(eo);
 	EXPECT_EQ(EINVAL, error);
 }
 
 TEST(MapCreateTest, CreateWithZeroMaxEntries)
 {
 	int error;
-	struct ebpf_map map;
+	struct ebpf_obj_map eom;
+	struct ebpf_obj *eo;
+	struct ebpf_map *m;
 
-	error = ebpf_map_init(&map, EBPF_MAP_TYPE_ARRAY, sizeof(uint32_t), 0,
-			      100, 0);
+	eo = (struct ebpf_obj *)&eom;
+	*eo = (struct ebpf_obj){
+		.type = EBPF_OBJ_TYPE_MAP,
+	};
+	m = EO2EMAP(eo);
+	*m = (struct ebpf_map){
+		.type = EBPF_MAP_TYPE_ARRAY,
+		.key_size = sizeof(uint32_t),
+		.max_entries = 0,
+		.map_flags = 0,
+	};
 
+	error = ebpf_map_init(eo);
 	EXPECT_EQ(EINVAL, error);
 }

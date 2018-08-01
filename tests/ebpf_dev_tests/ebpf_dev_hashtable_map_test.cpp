@@ -205,11 +205,20 @@ TEST_F(EbpfDevHashTableMapTest, CorrectGetNextKey)
 
 	union ebpf_req req2;
 	req2.map_fd = map_fd;
-	req2.key = &key2;
+	req2.key = NULL;
 	req2.next_key = &next_key;
 
 	error = ioctl(ebpf_fd, EBPFIOC_MAP_GET_NEXT_KEY, &req2);
 	EXPECT_EQ(50, next_key);
+
+	key1 = next_key;
+
+	req2.map_fd = map_fd;
+	req2.key = &key1;
+	req2.next_key = &next_key;
+
+	error = ioctl(ebpf_fd, EBPFIOC_MAP_GET_NEXT_KEY, &req2);
+	EXPECT_EQ(70, next_key);
 }
 
 TEST_F(EbpfDevHashTableMapTest, LookupUnexistingEntry)
