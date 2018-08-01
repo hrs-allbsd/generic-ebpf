@@ -20,149 +20,185 @@
 
 struct ebpf_map_ops *ebpf_map_ops[__EBPF_MAP_TYPE_MAX];
 
-void
+int
 ebpf_register_map_type(uint16_t id, struct ebpf_map_ops *ops)
 {
+
 	if (id < __EBPF_MAP_TYPE_MAX && ops) {
 		ebpf_map_ops[id] = ops;
-	}
+		return (0);
+	} else
+		return (EINVAL);
+}
+
+void
+ebpf_obj_map_dtor(struct ebpf_obj *eo, ebpf_thread_t *td)
+{
+
+	ebpf_map_deinit(eo, NULL);
 }
 
 int
-ebpf_map_init(struct ebpf_map *mapp, uint16_t type, uint32_t key_size,
-	      uint32_t value_size, uint32_t max_entries, uint32_t flags)
+ebpf_map_init(struct ebpf_obj *eo)
 {
+	struct ebpf_map *m = EO2EMAP(eo);
 	int error;
 
-	if (!mapp || type >= __EBPF_MAP_TYPE_MAX || !key_size || !value_size ||
-	    !max_entries) {
+	if (m == NULL ||
+	    m->type >= __EBPF_MAP_TYPE_MAX ||
+	    m->key_size == 0 ||
+	    m->value_size == 0 ||
+	    m->max_entries == 0)
 		return EINVAL;
-	}
+	m->m_ops = ebpf_map_ops[m->type];
+	EBPF_DPRINTF("%s: m=%p, m->m_ops=%p\n", __func__, m, m->m_ops);
 
-	mapp->type = type;
-	mapp->key_size = key_size;
-	mapp->value_size = value_size;
-	mapp->max_entries = max_entries;
-	mapp->map_flags = flags;
-	mapp->deinit = ebpf_map_deinit_default;
+	ebpf_assert(m->m_ops->init != NULL);
+	error = m->m_ops->init(eo);
 
-	error = ebpf_map_ops[type]->init(mapp, key_size, value_size,
-					 max_entries, flags);
-	if (error) {
-		return error;
-	}
-
-	return 0;
+	return (error);
 }
 
 void *
-ebpf_map_lookup_elem(struct ebpf_map *map, void *key)
+ebpf_map_lookup_elem(struct ebpf_obj *eo, void *key)
 {
-	if (!map || !key) {
+	struct ebpf_map *m = EO2EMAP(eo);
+
+	if (m == NULL || key == NULL) {
 		return NULL;
 	}
+	EBPF_DPRINTF("%s: m=%p\n", __func__, m);
+	EBPF_DPRINTF("%s: m->m_ops=%p\n", __func__, m->m_ops);
+	ebpf_assert(m->m_ops != NULL);
+	EBPF_DPRINTF("%s: m->m_ops->lookup_elem=%p\n", __func__, m->m_ops);
+	ebpf_assert(m->m_ops->lookup_elem != NULL);
 
-	return ebpf_map_ops[map->type]->lookup_elem(map, key);
+	return m->m_ops->lookup_elem(eo, key);
 }
 
 int
-ebpf_map_lookup_elem_from_user(struct ebpf_map *map, void *key, void *value)
+ebpf_map_lookup_elem_from_user(struct ebpf_obj *eo, void *key, void *value)
 {
+	struct ebpf_map *m = EO2EMAP(eo);
 	int error;
 
-	if (!map || !key || !value) {
+	if (m == NULL || key == NULL || value == NULL) {
 		return EINVAL;
 	}
+	ebpf_assert(m->m_ops != NULL);
+	ebpf_assert(m->m_ops->lookup_elem_from_user != NULL);
 
 	ebpf_epoch_enter();
-	error = ebpf_map_ops[map->type]->lookup_elem_from_user(map, key, value);
+	error = m->m_ops->lookup_elem_from_user(eo, key, value);
 	ebpf_epoch_exit();
 
 	return error;
 }
 
 int
-ebpf_map_update_elem(struct ebpf_map *map, void *key, void *value,
+ebpf_map_update_elem(struct ebpf_obj *eo, void *key, void *value,
 		     uint64_t flags)
 {
-	if (!map || !key || !value || flags > EBPF_EXIST) {
+	struct ebpf_map *m = EO2EMAP(eo);
+
+	if (m == NULL || key == NULL || value == NULL || flags > EBPF_EXIST) {
 		return EINVAL;
 	}
 
-	return ebpf_map_ops[map->type]->update_elem(map, key, value, flags);
+	ebpf_assert(m->m_ops != NULL);
+	ebpf_assert(m->m_ops->update_elem != NULL);
+	return m->m_ops->update_elem(eo, key, value, flags);
 }
 
 int
-ebpf_map_update_elem_from_user(struct ebpf_map *map, void *key, void *value,
+ebpf_map_update_elem_from_user(struct ebpf_obj *eo, void *key, void *value,
 			       uint64_t flags)
 {
+	struct ebpf_map *m = EO2EMAP(eo);
 	int error;
 
+	ebpf_assert(m->m_ops != NULL);
+	ebpf_assert(m->m_ops->update_elem_from_user != NULL);
+
 	ebpf_epoch_enter();
-	error = ebpf_map_ops[map->type]->update_elem_from_user(map, key, value,
-							       flags);
+	error = m->m_ops->update_elem_from_user(eo, key, value, flags);
 	ebpf_epoch_exit();
 
 	return error;
 }
 
 int
-ebpf_map_delete_elem(struct ebpf_map *map, void *key)
+ebpf_map_delete_elem(struct ebpf_obj *eo, void *key)
 {
-	if (!map || !key) {
+	struct ebpf_map *m = EO2EMAP(eo);
+
+	if (m == NULL || key == NULL) {
 		return EINVAL;
 	}
+	ebpf_assert(m->m_ops != NULL);
+	ebpf_assert(m->m_ops->delete_elem != NULL);
 
-	return ebpf_map_ops[map->type]->delete_elem(map, key);
+	return m->m_ops->delete_elem(eo, key);
 }
 
 int
-ebpf_map_delete_elem_from_user(struct ebpf_map *map, void *key)
+ebpf_map_delete_elem_from_user(struct ebpf_obj *eo, void *key)
 {
+	struct ebpf_map *m = EO2EMAP(eo);
 	int error;
-	if (!map || !key) {
+
+	if (m == NULL || key == NULL) {
 		return EINVAL;
 	}
+	ebpf_assert(m->m_ops != NULL);
+	ebpf_assert(m->m_ops->delete_elem_from_user != NULL);
 
 	ebpf_epoch_enter();
-	error = ebpf_map_ops[map->type]->delete_elem_from_user(map, key);
+	error = m->m_ops->delete_elem_from_user(eo, key);
 	ebpf_epoch_exit();
 
 	return error;
 }
 
 int
-ebpf_map_get_next_key_from_user(struct ebpf_map *map, void *key, void *next_key)
+ebpf_map_get_next_key_from_user(struct ebpf_obj *eo, void *key, void *next_key)
 {
+	struct ebpf_map *m = EO2EMAP(eo);
 	int error;
 
 	/*
 	 * key == NULL is valid, because it means "Give me a
 	 * first key"
 	 */
-	if (!map || !next_key) {
+	if (m == NULL || next_key == NULL) {
 		return EINVAL;
 	}
+	ebpf_assert(m->m_ops != NULL);
+	ebpf_assert(m->m_ops->get_next_key_from_user != NULL);
 
 	ebpf_epoch_enter();
-	error =
-	    ebpf_map_ops[map->type]->get_next_key_from_user(map, key, next_key);
+	error = m->m_ops->get_next_key_from_user(eo, key, next_key);
 	ebpf_epoch_exit();
 
 	return error;
 }
 
 void
-ebpf_map_deinit_default(struct ebpf_map *map, void *arg)
+ebpf_map_deinit_default(struct ebpf_obj *eo, void *arg)
 {
-	ebpf_map_ops[map->type]->deinit(map, arg);
+
+	return;
 }
 
 void
-ebpf_map_deinit(struct ebpf_map *map, void *arg)
+ebpf_map_deinit(struct ebpf_obj *eo, void *arg)
 {
-	if (!map) {
+	struct ebpf_map *m = EO2EMAP(eo);
+
+	if (m == NULL) {
 		return;
 	}
-	map->deinit(map, arg);
+	ebpf_assert(m->m_ops != NULL);
+	ebpf_assert(m->m_ops->deinit != NULL);
+	m->m_ops->deinit(eo, arg);
 }
