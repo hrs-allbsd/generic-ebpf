@@ -46,11 +46,11 @@ enum ebpf_map_update_flags {
 #define	EBPF_DPRINTF(...)
 #define	EBPF_DPRINTF0(...)
 #else
-#define	EBPF_DPRINTF(...)
+#define	EBPF_DPRINTF(...)			\
 	do {					\
 		printf(__VA_ARGS__);		\
 	} while(0)
-#define	EBPF_DPRINTF0(v, ...)
+#define	EBPF_DPRINTF0(v, ...)			\
 	do {					\
 		if ((v) < DEBUG_VERBOSE)	\
 			printf(__VA_ARGS__);	\
