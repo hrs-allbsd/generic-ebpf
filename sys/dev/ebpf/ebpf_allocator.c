@@ -62,9 +62,7 @@ ebpf_allocator_deinit(ebpf_allocator_t *alloc, void (*dtor)(void *, void *),
 
 	if (dtor) {
 		SLIST_FOREACH(tmp, &alloc->free_block, entry)
-		{
 			dtor(tmp, arg);
-		}
 	}
 
 	while (!SLIST_EMPTY(&alloc->used_segment)) {
@@ -74,7 +72,6 @@ ebpf_allocator_deinit(ebpf_allocator_t *alloc, void (*dtor)(void *, void *),
 			ebpf_free(tmp);
 		}
 	}
-
 	ebpf_mtx_destroy(&alloc->lock);
 }
 
@@ -100,9 +97,8 @@ ebpf_allocator_prealloc(ebpf_allocator_t *alloc, uint32_t nblocks,
 		}
 
 		data = ebpf_calloc(1, size);
-		if (data == NULL) {
+		if (data == NULL)
 			return ENOMEM;
-		}
 		segment = (ebpf_allocator_entry_t *)data;
 		SLIST_INSERT_HEAD(&alloc->used_segment, segment, entry);
 		data += sizeof(*segment);
@@ -120,18 +116,16 @@ ebpf_allocator_prealloc(ebpf_allocator_t *alloc, uint32_t nblocks,
 		do {
 			if (ctor) {
 				error = ctor(data, arg);
-				if (error) {
-					return error;
-				}
+				if (error)
+					return (error);
 			}
 			SLIST_INSERT_HEAD(&alloc->free_block,
 					  (ebpf_allocator_entry_t *)data,
 					  entry);
 			data += alloc->block_size;
 			size -= alloc->block_size;
-			if (++count == nblocks) {
+			if (++count == nblocks)
 				goto finish;
-			}
 		} while (size > alloc->block_size);
 	}
 
