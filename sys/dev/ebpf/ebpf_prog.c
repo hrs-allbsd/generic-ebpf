@@ -20,6 +20,24 @@
 #include "ebpf_prog.h"
 #include "ebpf_map.h"
 
+static void
+ebpf_obj_prog_dtor(struct ebpf_obj *eo, ebpf_thread_t *td)
+{
+	struct ebpf_prog *ep;
+
+	ep = EO2EPROG(eo);
+	if (ep != NULL && ep->deinit != NULL)
+		ep->deinit(eo, NULL);
+}
+
+static void
+ebpf_prog_deinit_default(struct ebpf_obj *eo, void *arg)
+{
+	struct ebpf_prog *ep = EO2EPROG(eo);
+
+	ebpf_free(ep->prog);
+}
+
 int
 ebpf_prog_init(struct ebpf_obj *eo)
 {
@@ -40,16 +58,10 @@ ebpf_prog_init(struct ebpf_obj *eo)
 	memcpy(insts, ep->prog, ep->prog_len);
 	ep->prog = insts;
 	ep->deinit = ebpf_prog_deinit_default;
+	if (eo->dtor == NULL)
+		eo->dtor = ebpf_obj_prog_dtor;
 
 	return 0;
-}
-
-void
-ebpf_prog_deinit_default(struct ebpf_obj *eo, void *arg)
-{
-	struct ebpf_prog *ep = EO2EPROG(eo);
-
-	ebpf_free(ep->prog);
 }
 
 void

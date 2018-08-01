@@ -30,7 +30,6 @@ struct ebpf_prog {
 };
 
 int ebpf_prog_init(struct ebpf_obj *);
-void ebpf_prog_deinit_default(struct ebpf_obj *, void *);
 void ebpf_prog_deinit(struct ebpf_obj *, void *);
 
 /* Accessor to ebpf_prog in ebpf_obj. */

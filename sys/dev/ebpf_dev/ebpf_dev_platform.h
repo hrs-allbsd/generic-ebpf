@@ -31,7 +31,6 @@ struct ebpf_obj;
 /*
  * Prototypes of platform dependent functions.
  */
-bool is_ebpf_objfile(ebpf_file_t *fp);
 int ebpf_fopen(ebpf_thread_t *td, ebpf_file_t **fp, int *fd,
 	       struct ebpf_obj *data);
 int ebpf_fget(ebpf_thread_t *td, int fd, ebpf_file_t **f);

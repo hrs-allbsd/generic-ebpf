@@ -83,14 +83,8 @@ ebpf_map_lookup_elem_from_user_t ebpf_map_lookup_elem_from_user;
 ebpf_map_update_elem_t ebpf_map_update_elem_from_user;
 ebpf_map_delete_elem_t ebpf_map_delete_elem_from_user;
 ebpf_map_get_next_key_t ebpf_map_get_next_key_from_user;
-
 /*
- * Users can extend (make subclass of) struct ebpf_map, so the destructor of
- * struct ebpf_map might be
- * overwritten. ebpf_map_deinit just calls map_object->dtor and its default
- * value is
- * ebpf_map_deinit_default. This is useful for managing external reference count
- * or locking etc.
+ * One can extend (make subclass of) struct ebpf_map and override
+ * ebpf_map_deinit to manage external reference count, locking, or etc.
  */
 ebpf_map_deinit_t ebpf_map_deinit;
-ebpf_map_deinit_t ebpf_map_deinit_default;

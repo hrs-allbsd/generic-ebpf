@@ -22,35 +22,6 @@
 #include <sys/ebpf_obj.h>
 #include <sys/ebpf_dev.h>
 
-/*
- * Extend badfileops for anonimous file for ebpf objects.
- */
-static struct fileops ebpf_objf_ops;
-static int
-ebpf_objfile_close(struct file *fp, struct thread *td)
-{
-	struct ebpf_obj *eo;
-
-	ebpf_assert(fp != NULL);
-
- 	eo = fp->f_data;
-	EBPF_DPRINTF("%s: fp=%p, fp->f_data=%p, fp->f_count=%d\n",
-	    __func__, fp, fp->f_data, fp->f_count);
-	if (fp->f_count == 0)
-		ebpf_obj_delete(eo, td);
-
-	return 0;
-}
-
-bool
-is_ebpf_objfile(ebpf_file_t *fp)
-{
-	if (!fp) {
-		return false;
-	}
-	return fp->f_ops == &ebpf_objf_ops;
-}
-
 int
 ebpf_fopen(ebpf_thread_t *td, ebpf_file_t **fp, int *fd, struct ebpf_obj *eo)
 {
@@ -64,22 +35,11 @@ ebpf_fopen(ebpf_thread_t *td, ebpf_file_t **fp, int *fd, struct ebpf_obj *eo)
 	if (error) {
 		return error;
 	}
-
-	/*
-	 * File operation definition for ebpf object file.
-	 * It simply check reference count on file close
-	 * and execute destractor of the ebpf object if
-	 * the reference count was 0. It doesn't allow to
-	 * perform any file operations except close(2)
-	 */
-	memcpy(&ebpf_objf_ops, &badfileops, sizeof(struct fileops));
-	ebpf_objf_ops.fo_close = ebpf_objfile_close;
-
 	/*
 	 * finit reserves two reference count for us, so release one
 	 * since we don't need it.
 	 */
-	finit(*fp, FREAD | FWRITE, DTYPE_NONE, eo, &ebpf_objf_ops);
+	finit(*fp, FREAD | FWRITE, DTYPE_NONE, eo, &ebpf_obj_fileops);
 	fdrop(*fp, td);
 
 	EBPF_DPRINTF("%s: leave fp=%p fp->f_data=%p\n", __func__, (*fp),

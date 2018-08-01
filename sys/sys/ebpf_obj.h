@@ -36,5 +36,9 @@ struct ebpf_obj {
 	void (*dtor)(struct ebpf_obj *, ebpf_thread_t *);
 };
 
+extern struct fileops ebpf_obj_fileops;
+
+#ifdef _KERNEL
 struct ebpf_obj *ebpf_obj_data(ebpf_file_t *);
 void ebpf_obj_delete(struct ebpf_obj *, ebpf_thread_t *);
+#endif

@@ -189,13 +189,6 @@ ebpf_map_get_next_key_from_user(struct ebpf_obj *eo, void *key, void *next_key)
 }
 
 void
-ebpf_map_deinit_default(struct ebpf_obj *eo, void *arg)
-{
-
-	return;
-}
-
-void
 ebpf_map_deinit(struct ebpf_obj *eo, void *arg)
 {
 	struct ebpf_map *m = EO2EMAP(eo);

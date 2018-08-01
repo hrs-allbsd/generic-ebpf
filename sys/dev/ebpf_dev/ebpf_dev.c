@@ -49,6 +49,7 @@ static void
 ebpf_obj_prog_dtor(struct ebpf_obj *eo, ebpf_thread_t *td)
 {
 	struct ebpf_obj_prog *eop;
+	struct ebpf_prog *ep;
 
 	eop = EO2EOP(eo);
 	for (int i = 0; i < EBPF_PROG_MAX_ATTACHED_MAPS; i++) {
@@ -56,7 +57,9 @@ ebpf_obj_prog_dtor(struct ebpf_obj *eo, ebpf_thread_t *td)
 			ebpf_fdrop(eop->attached_maps[i]->obj.f, td);
 		}
 	}
-	ebpf_prog_deinit(eo, NULL);
+	ep = EO2EPROG(eo);
+	if (ep != NULL && ep->deinit != NULL)
+		ep->deinit(eo, NULL);
 }
 
 int
