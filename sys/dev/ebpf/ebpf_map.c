@@ -35,7 +35,11 @@ void
 ebpf_obj_map_dtor(struct ebpf_obj *eo, ebpf_thread_t *td)
 {
 
-	ebpf_map_deinit(eo, NULL);
+	struct ebpf_map *m = EO2EMAP(eo);
+
+	if (m == NULL || m->m_ops == NULL || m->m_ops->deinit == NULL)
+		return;
+	m->m_ops->deinit(eo, NULL);
 }
 
 int
@@ -51,6 +55,7 @@ ebpf_map_init(struct ebpf_obj *eo)
 	    m->max_entries == 0)
 		return EINVAL;
 	m->m_ops = ebpf_map_ops[m->type];
+	eo->dtor = ebpf_obj_map_dtor;
 	EBPF_DPRINTF("%s: m=%p, m->m_ops=%p\n", __func__, m, m->m_ops);
 
 	ebpf_assert(m->m_ops->init != NULL);
