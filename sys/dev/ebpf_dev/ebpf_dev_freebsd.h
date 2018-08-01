@@ -18,6 +18,7 @@
 
 #pragma once
 
+#ifdef _KERNEL
 #include <sys/param.h>
 #include <sys/conf.h>
 #include <sys/module.h>
@@ -34,11 +35,7 @@
 #include <sys/refcount.h>
 #include <sys/capsicum.h>
 #include <machine/stdarg.h>
+#endif
 
 typedef struct thread ebpf_thread_t;
 typedef struct file ebpf_file_t;
-
-#include <dev/ebpf_dev/ebpf_obj.h>
-
-#define EBPF_OBJ(filep) filep->f_data
-#define EBPF_OBJ_MAP(filep) (struct ebpf_obj_map *)EBPF_OBJ(filep)

@@ -16,9 +16,10 @@
  * limitations under the License.
  */
 
+#include <dev/ebpf/ebpf_platform.h>
 #include <dev/ebpf_dev/ebpf_dev_platform.h>
-#include <dev/ebpf_dev/ebpf_obj.h>
 #include <sys/ebpf.h>
+#include <sys/ebpf_obj.h>
 #include <sys/ebpf_dev.h>
 
 /*
@@ -28,11 +29,14 @@ static struct fileops ebpf_objf_ops;
 static int
 ebpf_objfile_close(struct file *fp, struct thread *td)
 {
-	struct ebpf_obj *obj = fp->f_data;
+	struct ebpf_obj *eo;
 
-	if (!fp->f_count) {
-		ebpf_obj_delete(obj, td);
-	}
+	ebpf_assert(fp != NULL);
+
+ 	eo = fp->f_data;
+	EBPF_DPRINTF("%s: fp=%p, fp->f_data=%p\n", __func__, fp, fp->f_data);
+	if (fp->f_count == 0)
+		ebpf_obj_delete(eo, td);
 
 	return 0;
 }
@@ -47,11 +51,11 @@ is_ebpf_objfile(ebpf_file_t *fp)
 }
 
 int
-ebpf_fopen(ebpf_thread_t *td, ebpf_file_t **fp, int *fd, struct ebpf_obj *data)
+ebpf_fopen(ebpf_thread_t *td, ebpf_file_t **fp, int *fd, struct ebpf_obj *eo)
 {
 	int error;
 
-	if (!td || !fp || !fd || !data) {
+	if (!td || !fp || !fd || !eo) {
 		return EINVAL;
 	}
 
@@ -74,8 +78,11 @@ ebpf_fopen(ebpf_thread_t *td, ebpf_file_t **fp, int *fd, struct ebpf_obj *data)
 	 * finit reserves two reference count for us, so release one
 	 * since we don't need it.
 	 */
-	finit(*fp, FREAD | FWRITE, DTYPE_NONE, data, &ebpf_objf_ops);
+	finit(*fp, FREAD | FWRITE, DTYPE_NONE, eo, &ebpf_objf_ops);
 	fdrop(*fp, td);
+
+	EBPF_DPRINTF("%s: leave fp=%p fp->f_data=%p\n", __func__, (*fp),
+	    (*fp)->f_data);
 
 	return 0;
 }

@@ -19,7 +19,7 @@
 #pragma once
 
 #ifdef __FreeBSD__
-#include "ebpf_dev_freebsd.h"
+#include <dev/ebpf_dev/ebpf_dev_freebsd.h>
 #elif defined(linux)
 #include <ebpf_dev_linux.h>
 #else
