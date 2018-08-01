@@ -31,9 +31,12 @@ array_map_deinit(struct ebpf_obj *eo, void *arg)
 {
 	struct ebpf_map *m = EO2EMAP(eo);
 
+	EBPF_DPRINTF("%s: enter, eo=%p\n", __func__, eo);
+
 	ebpf_epoch_wait();
 
 	ebpf_assert(m != NULL);
+	EBPF_DPRINTF("%s: free BASE_PTR(m)=%p\n", __func__, BASE_PTR(m));
 	ebpf_free(BASE_PTR(m));
 }
 
@@ -42,6 +45,7 @@ array_map_deinit_percpu(struct ebpf_obj *eo, void *arg)
 {
 	struct ebpf_map *m = EO2EMAP(eo);
 
+	EBPF_DPRINTF("%s: enter, eo=%p\n", __func__, eo);
 	ebpf_epoch_wait();
 
 	for (uint16_t i = 0; i < ebpf_ncpus(); i++) {
@@ -61,11 +65,13 @@ array_map_init(struct ebpf_obj *eo)
 	struct ebpf_map *m = EO2EMAP(eo);
 	void *b;
 
+	EBPF_DPRINTF("%s: enter, eo=%p\n", __func__, eo);
 	b = ebpf_calloc(m->max_entries, m->key_size);
 	if (b == NULL) {
 		return ENOMEM;
 	}
 	BASE_PTR(m) = b;
+	EBPF_DPRINTF("%s: BASE_PTR(m)=%p\n", __func__, BASE_PTR(m));
 	m->percpu = false;
 
 	return 0;

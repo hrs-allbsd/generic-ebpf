@@ -23,43 +23,64 @@
 MALLOC_DECLARE(M_EBPFBUF);
 MALLOC_DEFINE(M_EBPFBUF, "ebpf-buffers", "Buffers for ebpf and its subsystems");
 
+#ifdef DEBUG_VERBOSE
+static int malloc_count;
+#endif
+
 /*
  * Platform dependent function implementations
  */
 void *
 ebpf_malloc(size_t size)
 {
-	return malloc(size, M_EBPFBUF, M_NOWAIT);
+	void *p = malloc(size, M_EBPFBUF, M_NOWAIT);
+	EBPF_DPRINTF("%s: %p(%d)\n", __func__, p, ++malloc_count);
+	return (p);
 }
 
 void *
 ebpf_calloc(size_t number, size_t size)
 {
-	return malloc(number * size, M_EBPFBUF, M_NOWAIT | M_ZERO);
+	void *p = malloc(number * size, M_EBPFBUF, M_NOWAIT | M_ZERO);
+	EBPF_DPRINTF("%s: %p(%d)\n", __func__, p, ++malloc_count);
+	return (p);
 }
 
 void *
 ebpf_realloc(void *ptr, size_t size)
 {
-	return realloc(ptr, size, M_EBPFBUF, M_NOWAIT);
+	void *p = realloc(ptr, size, M_EBPFBUF, M_NOWAIT);
+	EBPF_DPRINTF("%s: %p\n", __func__, p);
+	return (p);
 }
 
 void *
 ebpf_exalloc(size_t size)
 {
-	return malloc(size, M_EBPFBUF, M_NOWAIT | M_EXEC);
+	void *p = malloc(size, M_EBPFBUF, M_NOWAIT | M_EXEC);
+	EBPF_DPRINTF("%s: %p(%d)\n", __func__, p, ++malloc_count);
+	return (p);
 }
 
 void
 ebpf_exfree(void *mem, size_t size)
 {
 
+	if (mem != NULL)
+		malloc_count--;
+
+	EBPF_DPRINTF("%s: %p(%d)\n", __func__, mem, malloc_count);
 	free(mem, M_EBPFBUF);
 }
 
 void
 ebpf_free(void *mem)
 {
+
+	if (mem != NULL)
+		malloc_count--;
+
+	EBPF_DPRINTF("%s: %p(%d)\n", __func__, mem, malloc_count);
 	free(mem, M_EBPFBUF);
 }
 

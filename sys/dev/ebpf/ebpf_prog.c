@@ -25,9 +25,12 @@ ebpf_obj_prog_dtor(struct ebpf_obj *eo, ebpf_thread_t *td)
 {
 	struct ebpf_prog *ep;
 
+	EBPF_DPRINTF("%s: enter, eo=%p\n", __func__, eo);
 	ep = EO2EPROG(eo);
-	if (ep != NULL && ep->deinit != NULL)
+	if (ep != NULL && ep->deinit != NULL) {
+		EBPF_DPRINTF("%s: ep->deinit=%p\n", __func__, ep->deinit);
 		ep->deinit(eo, NULL);
+	}
 }
 
 static void
@@ -51,6 +54,7 @@ ebpf_prog_init(struct ebpf_obj *eo)
 	}
 
 	/* ep->prog will be replaced with newly-allocated buffer. */
+	EBPF_DPRINTF("%s: eo=%p\n", __func__, eo);
 	struct ebpf_inst *insts = ebpf_malloc(ep->prog_len);
 	if (insts == NULL) {
 		return ENOMEM;
@@ -69,6 +73,7 @@ ebpf_prog_deinit(struct ebpf_obj *eo, void *arg)
 {
 	struct ebpf_prog *ep = EO2EPROG(eo);
 
+	EBPF_DPRINTF("%s: eo=%p\n", __func__, eo);
 	if (ep == NULL)
 		return;
 	if (ep->deinit != NULL)

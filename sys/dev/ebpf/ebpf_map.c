@@ -37,8 +37,11 @@ ebpf_obj_map_dtor(struct ebpf_obj *eo, ebpf_thread_t *td)
 
 	struct ebpf_map *m = EO2EMAP(eo);
 
+	EBPF_DPRINTF("%s: enter eo=%p\n", __func__, eo);
 	if (m == NULL || m->m_ops == NULL || m->m_ops->deinit == NULL)
 		return;
+	EBPF_DPRINTF("%s: enter m=%p, m->m_ops=%p, m->m_ops->deinit=%p\n",
+	    __func__, m, m->m_ops, m->m_ops->deinit);
 	m->m_ops->deinit(eo, NULL);
 }
 
@@ -193,9 +196,9 @@ ebpf_map_deinit(struct ebpf_obj *eo, void *arg)
 {
 	struct ebpf_map *m = EO2EMAP(eo);
 
-	if (m == NULL) {
+	EBPF_DPRINTF("%s: enter eo=%p\n", __func__, eo);
+	if (m == NULL)
 		return;
-	}
 	ebpf_assert(m->m_ops != NULL);
 	ebpf_assert(m->m_ops->deinit != NULL);
 	m->m_ops->deinit(eo, arg);
