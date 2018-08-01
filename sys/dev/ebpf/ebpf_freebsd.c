@@ -239,6 +239,7 @@ static void ebpf_init_map_types(void);
 static void
 ebpf_fini(void)
 {
+	epoch_free(ebpf_epoch);
 	printf("ebpf unloaded\n");
 }
 
