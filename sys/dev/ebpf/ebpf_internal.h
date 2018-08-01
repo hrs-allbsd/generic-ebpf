@@ -20,6 +20,7 @@
 #pragma once
 
 #include "ebpf_platform.h"
+#include <sys/ebpf.h>
 #include <sys/ebpf_vm.h>
 #include <sys/ebpf_inst.h>
 

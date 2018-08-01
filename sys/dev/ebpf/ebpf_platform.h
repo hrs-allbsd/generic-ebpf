@@ -48,7 +48,7 @@ extern void *ebpf_calloc(size_t number, size_t size);
 extern void *ebpf_realloc(void *ptr, size_t size);
 extern void ebpf_free(void *mem);
 extern void *ebpf_exalloc(size_t size);
-extern void ebpf_exfree(void *mem, size_t size);
+extern void ebpf_exfree(void *, size_t);
 extern int ebpf_error(const char *fmt, ...);
 extern void ebpf_assert(bool expr);
 extern uint16_t ebpf_ncpus(void);
@@ -66,10 +66,15 @@ extern void ebpf_epoch_call(ebpf_epoch_context_t *ctx,
 			    void (*callback)(ebpf_epoch_context_t *));
 extern void ebpf_epoch_wait(void);
 extern void ebpf_mtx_init(ebpf_mtx_t *mutex, const char *name);
+extern void ebpf_mtx_spin_init(ebpf_mtx_t *mutex, const char *name);
 extern void ebpf_mtx_lock(ebpf_mtx_t *mutex);
 extern void ebpf_mtx_unlock(ebpf_mtx_t *mutex);
+extern void ebpf_mtx_lock_spin(ebpf_mtx_t *mutex);
+extern void ebpf_mtx_unlock_spin(ebpf_mtx_t *mutex);
 extern void ebpf_mtx_destroy(ebpf_mtx_t *mutex);
 extern uint32_t ebpf_jenkins_hash(const void *buf, size_t len, uint32_t hash);
+extern void *ebpf_hashinit_flags(int, u_long *, int);
+extern void ebpf_hashdestroy(void *, u_long);
 
 /*
  * Prototypes of basic map ops

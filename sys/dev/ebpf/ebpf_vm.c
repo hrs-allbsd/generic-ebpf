@@ -24,37 +24,32 @@ struct ebpf_vm *
 ebpf_create(void)
 {
 	struct ebpf_vm *vm = ebpf_calloc(1, sizeof(*vm));
-	if (vm == NULL) {
-		return NULL;
-	}
+	if (vm == NULL)
+		goto err0;
 
 	vm->ext_funcs = ebpf_calloc(MAX_EXT_FUNCS, sizeof(*vm->ext_funcs));
-	if (vm->ext_funcs == NULL) {
-		ebpf_destroy(vm);
-		return NULL;
-	}
+	if (vm->ext_funcs == NULL)
+		goto err1;
 
 	vm->ext_func_names =
 	    ebpf_calloc(MAX_EXT_FUNCS, sizeof(*vm->ext_func_names));
-	if (vm->ext_func_names == NULL) {
-		ebpf_destroy(vm);
-		return NULL;
-	}
+	if (vm->ext_func_names == NULL)
+		goto err1;
 
 	return vm;
+err1:
+	ebpf_destroy(vm);
+err0:
+	return (NULL);
 }
 
 void
 ebpf_destroy(struct ebpf_vm *vm)
 {
-	if (!vm) {
+	if (vm == NULL)
 		return;
-	}
 
-	if (vm->jitted) {
-		ebpf_exfree(vm->jitted, vm->jitted_size);
-	}
-
+	ebpf_exfree(vm->jitted, vm->jitted_size);
 	ebpf_free(vm->insts);
 	ebpf_free(vm->ext_funcs);
 	ebpf_free(vm->ext_func_names);
@@ -64,9 +59,11 @@ ebpf_destroy(struct ebpf_vm *vm)
 int
 ebpf_register(struct ebpf_vm *vm, unsigned int idx, const char *name, void *fn)
 {
-	if (!vm || idx >= MAX_EXT_FUNCS || !name || !fn) {
+	if (vm == NULL ||
+	    idx >= MAX_EXT_FUNCS ||
+	    name == NULL ||
+	    fn == NULL )
 		return -1;
-	}
 
 	vm->ext_funcs[idx] = (ext_func)fn;
 	vm->ext_func_names[idx] = name;
@@ -82,6 +79,7 @@ ebpf_lookup_registered_function(struct ebpf_vm *vm, const char *name)
 
 	for (int i = 0; i < MAX_EXT_FUNCS; i++) {
 		const char *other = vm->ext_func_names[i];
+
 		if (other && !strcmp(other, name)) {
 			return i;
 		}
@@ -97,10 +95,6 @@ ebpf_load(struct ebpf_vm *vm, const void *prog, uint32_t prog_len)
 		return -1;
 	}
 
-	if (vm->insts) {
-		ebpf_unload(vm);
-	}
-
 	if (prog_len % sizeof(struct ebpf_inst) != 0) {
 		ebpf_error("prog_len must be a multiple of 8\n");
 		return -1;
@@ -110,6 +104,8 @@ ebpf_load(struct ebpf_vm *vm, const void *prog, uint32_t prog_len)
 		return -1;
 	}
 
+	if (vm != NULL)
+		ebpf_unload(vm);
 	vm->insts = ebpf_malloc(prog_len);
 	if (vm->insts == NULL) {
 		ebpf_error("out of memory\n");
@@ -125,18 +121,13 @@ ebpf_load(struct ebpf_vm *vm, const void *prog, uint32_t prog_len)
 void
 ebpf_unload(struct ebpf_vm *vm)
 {
-	if (!vm) {
-		return;
-	}
+	ebpf_assert(vm != NULL);
 
-	if (vm->jitted) {
-		ebpf_exfree(vm->jitted, vm->jitted_size);
-	}
-
-	if (vm->insts) {
-		ebpf_free(vm->insts);
-		vm->insts = NULL;
-	}
+	ebpf_exfree(vm->jitted, vm->jitted_size);
+	vm->jitted = NULL;
+	vm->jitted_size = 0;
+	ebpf_free(vm->insts);
+	vm->insts = NULL;
 }
 
 static uint32_t
@@ -153,14 +144,18 @@ ebpf_exec(const struct ebpf_vm *vm, void *mem, size_t mem_len)
 	uint64_t reg[16];
 	uint64_t stack[(STACK_SIZE + 7) / 8];
 
+	EBPF_DPRINTF("%s: enter ", __func__);
 	if (!vm) {
 		return UINT64_MAX;
 	}
+	EBPF_DPRINTF("\tvm=%p\n", vm);
 
 	if (!vm->insts) {
 		/* Code must be loaded before we can execute */
 		return UINT64_MAX;
 	}
+	EBPF_DPRINTF("\tvm->insts=%p\n", vm);
+	EBPF_DPRINTF("\tmem=%p, mem_len=%zu\n", mem, mem_len);
 
 	insts = vm->insts;
 	reg[1] = (uintptr_t)mem;
@@ -571,11 +566,13 @@ ebpf_exec(const struct ebpf_vm *vm, void *mem, size_t mem_len)
 			return UINT64_MAX;
 		}
 	}
+	EBPF_DPRINTF("%s: leave\n", __func__);
 }
 
 uint64_t
 ebpf_exec_jit(const struct ebpf_vm *vm, void *mem, size_t mem_len)
 {
+	EBPF_DPRINTF("%s: enter\n", __func__);
 	if (!vm) {
 		return UINT64_MAX;
 	}
@@ -585,4 +582,5 @@ ebpf_exec_jit(const struct ebpf_vm *vm, void *mem, size_t mem_len)
 	} else {
 		return UINT64_MAX;
 	}
+	EBPF_DPRINTF("%s: leave\n", __func__);
 }
