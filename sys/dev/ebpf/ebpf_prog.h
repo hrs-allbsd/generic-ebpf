@@ -19,16 +19,32 @@
 #pragma once
 
 #include <sys/ebpf.h>
+#include <sys/ebpf_obj.h>
 #include <sys/ebpf_inst.h>
 
 struct ebpf_prog {
 	uint16_t type;
 	struct ebpf_inst *prog;
 	uint32_t prog_len;
-	void (*deinit)(struct ebpf_prog *, void *);
+	void (*deinit)(struct ebpf_obj *, void *);
 };
 
-int ebpf_prog_init(struct ebpf_prog *prog_obj, uint16_t type,
-		   struct ebpf_inst *prog, uint32_t prog_len);
-void ebpf_prog_deinit_default(struct ebpf_prog *prog_obj, void *arg);
-void ebpf_prog_deinit(struct ebpf_prog *prog_obj, void *arg);
+int ebpf_prog_init(struct ebpf_obj *);
+void ebpf_prog_deinit_default(struct ebpf_obj *, void *);
+void ebpf_prog_deinit(struct ebpf_obj *, void *);
+
+/* Accessor to ebpf_prog in ebpf_obj. */
+#define EO2EPROG(eo)	( \
+	((eo) != NULL) ? \
+	(struct ebpf_prog *)&((struct ebpf_obj_prog *)(eo))->prog : NULL)
+/* Accessor to ebpf_obj_prog in ebpf_obj. */
+#define	EO2EOP(eo) (((eo) != NULL && (eo)->type == EBPF_OBJ_TYPE_PROG) ? \
+	(struct ebpf_obj_prog *)(eo) : NULL)
+
+#define EBPF_OBJ_PROG_MAX_ATTACHED_MAPS EBPF_DEV_PROG_MAX_ATTACHED_MAPS
+struct ebpf_obj_prog {
+	struct ebpf_obj obj;
+	struct ebpf_prog prog;
+	struct ebpf_obj_map *attached_maps[EBPF_PROG_MAX_ATTACHED_MAPS];
+	uint16_t nattached_maps;
+};

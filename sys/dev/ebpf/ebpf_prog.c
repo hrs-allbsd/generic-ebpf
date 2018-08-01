@@ -18,43 +18,47 @@
 
 #include "ebpf_platform.h"
 #include "ebpf_prog.h"
+#include "ebpf_map.h"
 
 int
-ebpf_prog_init(struct ebpf_prog *prog_obj, uint16_t type,
-	       struct ebpf_inst *prog, uint32_t prog_len)
+ebpf_prog_init(struct ebpf_obj *eo)
 {
-	if (!prog_obj || type >= __EBPF_PROG_TYPE_MAX || !prog || !prog_len) {
+	struct ebpf_prog *ep = EO2EPROG(eo);
+
+	if (ep == NULL ||
+	    ep->type >= __EBPF_PROG_TYPE_MAX ||
+	    ep->prog == NULL ||
+	    ep->prog_len == 0) {
 		return EINVAL;
 	}
 
-	struct ebpf_inst *insts = ebpf_malloc(prog_len);
-	if (!insts) {
+	/* ep->prog will be replaced with newly-allocated buffer. */
+	struct ebpf_inst *insts = ebpf_malloc(ep->prog_len);
+	if (insts == NULL) {
 		return ENOMEM;
 	}
-	memcpy(insts, prog, prog_len);
-
-	prog_obj->type = type;
-	prog_obj->prog_len = prog_len;
-	prog_obj->prog = insts;
-	prog_obj->deinit = ebpf_prog_deinit_default;
+	memcpy(insts, ep->prog, ep->prog_len);
+	ep->prog = insts;
+	ep->deinit = ebpf_prog_deinit_default;
 
 	return 0;
 }
 
 void
-ebpf_prog_deinit_default(struct ebpf_prog *prog_obj, void *arg)
+ebpf_prog_deinit_default(struct ebpf_obj *eo, void *arg)
 {
-	ebpf_free(prog_obj->prog);
+	struct ebpf_prog *ep = EO2EPROG(eo);
+
+	ebpf_free(ep->prog);
 }
 
 void
-ebpf_prog_deinit(struct ebpf_prog *prog_obj, void *arg)
+ebpf_prog_deinit(struct ebpf_obj *eo, void *arg)
 {
-	if (!prog_obj) {
-		return;
-	}
+	struct ebpf_prog *ep = EO2EPROG(eo);
 
-	if (prog_obj->deinit) {
-		prog_obj->deinit(prog_obj, arg);
-	}
+	if (ep == NULL)
+		return;
+	if (ep->deinit != NULL)
+		ep->deinit(eo, arg);
 }
