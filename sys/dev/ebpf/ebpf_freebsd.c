@@ -53,6 +53,7 @@ ebpf_exalloc(size_t size)
 void
 ebpf_exfree(void *mem, size_t size)
 {
+
 	free(mem, M_EBPFBUF);
 }
 
@@ -162,27 +163,51 @@ ebpf_epoch_wait(void)
 	epoch_wait(ebpf_epoch);
 }
 
-void
+inline void
 ebpf_mtx_init(ebpf_mtx_t *mutex, const char *name)
 {
+	EBPF_DPRINTF("%s: mtx_init(%p, \"%s\")\n", __func__, mutex, name);
+	mtx_init(mutex, name, NULL, MTX_DEF);
+}
+inline void
+ebpf_mtx_spin_init(ebpf_mtx_t *mutex, const char *name)
+{
+	EBPF_DPRINTF("%s: (%p, \"%s\")\n", __func__, mutex, name);
 	mtx_init(mutex, name, NULL, MTX_SPIN);
 }
 
-void
+inline void
 ebpf_mtx_lock(ebpf_mtx_t *mutex)
 {
+	EBPF_DPRINTF("%s: %p\n", __func__, mutex);
+	mtx_lock(mutex);
+}
+
+inline void
+ebpf_mtx_lock_spin(ebpf_mtx_t *mutex)
+{
+	EBPF_DPRINTF("%s: %p\n", __func__, mutex);
 	mtx_lock_spin(mutex);
 }
 
-void
+inline void
 ebpf_mtx_unlock(ebpf_mtx_t *mutex)
 {
+	EBPF_DPRINTF("%s: %p\n", __func__, mutex);
+	mtx_unlock(mutex);
+}
+
+inline void
+ebpf_mtx_unlock_spin(ebpf_mtx_t *mutex)
+{
+	EBPF_DPRINTF("%s: %p\n", __func__, mutex);
 	mtx_unlock_spin(mutex);
 }
 
-void
+inline void
 ebpf_mtx_destroy(ebpf_mtx_t *mutex)
 {
+	EBPF_DPRINTF("%s: %p\n", __func__, mutex);
 	mtx_destroy(mutex);
 }
 
@@ -190,6 +215,18 @@ uint32_t
 ebpf_jenkins_hash(const void *buf, size_t len, uint32_t hash)
 {
 	return jenkins_hash(buf, len, hash);
+}
+
+void *
+ebpf_hashinit_flags(int nelements, u_long *hashmask, int flags)
+{
+	return hashinit_flags(nelements, M_EBPFBUF, hashmask, flags);
+}
+
+void
+ebpf_hashdestroy(void *hashtbl, u_long hashmask)
+{
+	return hashdestroy(hashtbl, M_EBPFBUF, hashmask);
 }
 
 /*
