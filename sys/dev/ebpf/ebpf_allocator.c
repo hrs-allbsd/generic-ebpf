@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+#include <sys/ebpf.h>
 #include "ebpf_allocator.h"
 
 #define EBPF_ALLOCATOR_ALIGN sizeof(void *)
@@ -34,12 +35,14 @@ int
 ebpf_allocator_init(ebpf_allocator_t *alloc, uint32_t block_size,
 		    uint32_t nblocks, int (*ctor)(void *, void *), void *arg)
 {
+	EBPF_DPRINTF("%s: enter\n", __func__);
 	SLIST_INIT(&alloc->free_block);
 	SLIST_INIT(&alloc->used_segment);
 	alloc->nblocks = nblocks;
 	alloc->block_size = block_size;
 	alloc->count = nblocks;
-	ebpf_mtx_init(&alloc->lock, "ebpf_allocator lock");
+	ebpf_mtx_spin_init(&alloc->lock, "ebpf_allocator lock");
+	EBPF_DPRINTF("%s: after mtx_init\n", __func__);
 	return ebpf_allocator_prealloc(alloc, nblocks, ctor, arg);
 }
 
@@ -82,6 +85,7 @@ ebpf_allocator_prealloc(ebpf_allocator_t *alloc, uint32_t nblocks,
 	uint32_t count = 0;
 	int error = 0;
 
+	EBPF_DPRINTF("%s: enter\n", __func__);
 	while (true) {
 		uint32_t size;
 		uint8_t *data;
@@ -132,6 +136,7 @@ ebpf_allocator_prealloc(ebpf_allocator_t *alloc, uint32_t nblocks,
 	}
 
 finish:
+	EBPF_DPRINTF("%s: leave\n", __func__);
 	return 0;
 }
 
@@ -140,13 +145,17 @@ ebpf_allocator_alloc(ebpf_allocator_t *alloc)
 {
 	void *ret = NULL;
 
-	ebpf_mtx_lock(&alloc->lock);
+	EBPF_DPRINTF("%s: enter: alloc %p count=%u\n",
+	    __func__, alloc, alloc->count);
+	EBPF_DPRINTF("%s: wait lock: %p\n", __func__, &alloc->lock);
+	ebpf_mtx_lock_spin(&alloc->lock);
 	if (alloc->count > 0) {
 		ret = SLIST_FIRST(&alloc->free_block);
 		SLIST_REMOVE_HEAD(&alloc->free_block, entry);
 		alloc->count--;
 	}
-	ebpf_mtx_unlock(&alloc->lock);
+	ebpf_mtx_unlock_spin(&alloc->lock);
+	EBPF_DPRINTF("%s: leave: alloc->count=%u\n", __func__, alloc->count);
 
 	return ret;
 }
@@ -154,9 +163,11 @@ ebpf_allocator_alloc(ebpf_allocator_t *alloc)
 void
 ebpf_allocator_free(ebpf_allocator_t *alloc, void *ptr)
 {
-	ebpf_mtx_lock(&alloc->lock);
+	EBPF_DPRINTF("%s: enter. wait lock: %p\n", __func__, &alloc->lock);
+	ebpf_mtx_lock_spin(&alloc->lock);
 	SLIST_INSERT_HEAD(&alloc->free_block, (ebpf_allocator_entry_t *)ptr,
 			  entry);
 	alloc->count++;
-	ebpf_mtx_unlock(&alloc->lock);
+	ebpf_mtx_unlock_spin(&alloc->lock);
+	EBPF_DPRINTF("%s: leave\n", __func__);
 }
