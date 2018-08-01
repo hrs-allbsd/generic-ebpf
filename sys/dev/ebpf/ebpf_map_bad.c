@@ -19,45 +19,44 @@
 #include "ebpf_map.h"
 
 static int
-bad_map_init(struct ebpf_map *self, uint32_t key_size, uint32_t value_size,
-	     uint32_t max_entries, uint32_t flags)
+bad_map_init(struct ebpf_obj *eo)
 {
 	return EINVAL;
 }
 
 static int
-bad_map_update_elem(struct ebpf_map *self, void *key, void *value,
+bad_map_update_elem(struct ebpf_obj *eo, void *key, void *value,
 		    uint64_t flags)
 {
 	return EINVAL;
 }
 
 static void *
-bad_map_lookup_elem(struct ebpf_map *self, void *key)
+bad_map_lookup_elem(struct ebpf_obj *eo, void *key)
 {
 	return NULL;
 }
 
 static int
-bad_map_lookup_elem_from_user(struct ebpf_map *self, void *key, void *value)
+bad_map_lookup_elem_from_user(struct ebpf_obj *eo, void *key, void *value)
 {
 	return EINVAL;
 }
 
 static int
-bad_map_delete_elem(struct ebpf_map *self, void *key)
+bad_map_delete_elem(struct ebpf_obj *eo, void *key)
 {
 	return EINVAL;
 }
 
 static int
-bad_map_get_next_key(struct ebpf_map *self, void *key, void *next_key)
+bad_map_get_next_key(struct ebpf_obj *eo, void *key, void *next_key)
 {
 	return EINVAL;
 }
 
 static void
-bad_map_deinit(struct ebpf_map *self, void *arg)
+bad_map_deinit(struct ebpf_obj *eo, void *arg)
 {
 	return;
 }
@@ -71,4 +70,5 @@ struct ebpf_map_ops bad_map_ops = {
     .lookup_elem_from_user = bad_map_lookup_elem_from_user,
     .delete_elem_from_user = bad_map_delete_elem,
     .get_next_key_from_user = bad_map_get_next_key,
-    .deinit = bad_map_deinit};
+    .deinit = bad_map_deinit,
+};
