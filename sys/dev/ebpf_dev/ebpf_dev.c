@@ -165,6 +165,7 @@ ebpf_load_prog(union ebpf_req *req, ebpf_thread_t *td)
 		return EINVAL;
 	}
 
+	EBPF_DPRINTF("%s: enter\n", __func__);
 	insts = ebpf_malloc(req->prog_len);
 	if (insts == NULL)
 		return ENOMEM;
@@ -173,6 +174,7 @@ ebpf_load_prog(union ebpf_req *req, ebpf_thread_t *td)
 	if (error)
 		goto err0;
 
+	EBPF_DPRINTF("%s: middle\n", __func__);
 	eop = ebpf_calloc(1, sizeof(*eop));
 	if (eop == NULL) {
 		return ENOMEM;
@@ -192,6 +194,9 @@ ebpf_load_prog(union ebpf_req *req, ebpf_thread_t *td)
 	error = ebpf_prog_init(eo);
 	if (error)
 		goto err1;
+	/* ebpf_prog_init() allocates ep->prog. */
+	ebpf_free(insts);
+	insts = NULL;
 
 	error = ebpf_prog_mapfd_to_addr(eop, td);
 	if (error)
@@ -206,12 +211,8 @@ ebpf_load_prog(union ebpf_req *req, ebpf_thread_t *td)
 	eop->obj.f = f;
 
 	error = ebpf_copyout(&fd, req->prog_fdp, sizeof(int));
-	if (error) {
-		ebpf_prog_deinit(eo, td);
-		ebpf_free(insts);
-		ebpf_free(eop);
-	}
-	return (error);
+	if (error == 0)
+		return (0);
 err2:
 	ebpf_prog_deinit(eo, td);
 err1:
