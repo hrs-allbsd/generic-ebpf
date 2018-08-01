@@ -29,8 +29,8 @@
 #define STACK_SIZE 128
 
 struct ebpf_inst;
-typedef uint64_t (*ext_func)(uint64_t arg0, uint64_t arg1, uint64_t arg2,
-			     uint64_t arg3, uint64_t arg4);
+typedef uint64_t (*ext_func)(uint64_t, uint64_t, uint64_t,
+			     uint64_t, uint64_t);
 
 struct ebpf_vm {
 	struct ebpf_inst *insts;
@@ -41,7 +41,7 @@ struct ebpf_vm {
 	const char **ext_func_names;
 };
 
-unsigned int ebpf_lookup_registered_function(struct ebpf_vm *vm,
-					     const char *name);
-bool ebpf_validate(const struct ebpf_vm *vm, const struct ebpf_inst *insts,
-		   uint32_t num_insts);
+unsigned int ebpf_lookup_registered_function(struct ebpf_vm *,
+					     const char *);
+bool ebpf_validate(const struct ebpf_vm *, const struct ebpf_inst *,
+		   uint32_t);
