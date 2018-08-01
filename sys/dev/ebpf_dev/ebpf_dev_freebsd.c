@@ -34,7 +34,8 @@ ebpf_objfile_close(struct file *fp, struct thread *td)
 	ebpf_assert(fp != NULL);
 
  	eo = fp->f_data;
-	EBPF_DPRINTF("%s: fp=%p, fp->f_data=%p\n", __func__, fp, fp->f_data);
+	EBPF_DPRINTF("%s: fp=%p, fp->f_data=%p, fp->f_count=%d\n",
+	    __func__, fp, fp->f_data, fp->f_count);
 	if (fp->f_count == 0)
 		ebpf_obj_delete(eo, td);
 
