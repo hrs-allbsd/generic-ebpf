@@ -18,11 +18,17 @@
 
 #pragma once
 
-#include <dev/ebpf_dev/ebpf_dev_platform.h>
 #include <sys/ebpf_dev.h>
 
 /* Accessor for the container of an object. */
 #define EO2C(eo)	(((eo) != NULL) ? (void *)&(eo)[1] : NULL)
+
+#ifdef _KERNEL
+#include <dev/ebpf_dev/ebpf_dev_platform.h>
+#else
+typedef void ebpf_file_t;
+typedef void ebpf_thread_t;
+#endif
 
 enum ebpf_obj_type {
 	EBPF_OBJ_TYPE_PROG = 0,
@@ -36,9 +42,9 @@ struct ebpf_obj {
 	void (*dtor)(struct ebpf_obj *, ebpf_thread_t *);
 };
 
+#ifdef _KERNEL
 extern struct fileops ebpf_obj_fileops;
 
-#ifdef _KERNEL
 struct ebpf_obj *ebpf_obj_data(ebpf_file_t *);
 void ebpf_obj_delete(struct ebpf_obj *, ebpf_thread_t *);
 #endif
