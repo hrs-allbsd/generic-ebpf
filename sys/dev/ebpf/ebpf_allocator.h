@@ -20,6 +20,7 @@
 
 #include "ebpf_platform.h"
 #include "ebpf_queue.h"
+#include <sys/ebpf_obj.h>
 
 typedef struct ebpf_allocator_entry_s {
 	SLIST_ENTRY(ebpf_allocator_entry_s) entry;
@@ -29,15 +30,14 @@ typedef struct ebpf_allocator_s {
 	SLIST_HEAD(, ebpf_allocator_entry_s) free_block;
 	SLIST_HEAD(, ebpf_allocator_entry_s) used_segment;
 	ebpf_mtx_t lock;
+	int (*ctor)(ebpf_allocator_entry_t *, struct ebpf_obj *);
+	void (*dtor)(ebpf_allocator_entry_t *, struct ebpf_obj *);
 	uint32_t nblocks;
 	uint32_t block_size;
 	uint32_t count;
 } ebpf_allocator_t;
 
-int ebpf_allocator_init(ebpf_allocator_t *, uint32_t,
-			uint32_t, int (*)(void *, void *),
-			void *);
-void ebpf_allocator_deinit(ebpf_allocator_t *,
-			   void (*)(void *, void *), void *);
+int ebpf_allocator_init(ebpf_allocator_t *, struct ebpf_obj *);
+void ebpf_allocator_deinit(ebpf_allocator_t *, struct ebpf_obj *);
 void *ebpf_allocator_alloc(ebpf_allocator_t *);
 void ebpf_allocator_free(ebpf_allocator_t *, void *);

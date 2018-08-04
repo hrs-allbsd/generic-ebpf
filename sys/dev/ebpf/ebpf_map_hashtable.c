@@ -87,12 +87,13 @@ check_update_flags(struct ebpf_map_hashtable *mht, struct hash_elem *el,
 }
 
 static int
-percpu_elem_ctor(void *mem, void *arg)
+percpu_elem_ctor(ebpf_allocator_entry_t *ae, struct ebpf_obj *eo)
 {
 	uint8_t **valuep;
-	struct hash_elem *el = mem;
-	struct ebpf_map_hashtable *mht = arg;
+	struct hash_elem *el = (struct hash_elem *)ae;
+	struct ebpf_map_hashtable *mht = EO2EMHT(eo);
 
+	ebpf_assert(mht != NULL);
 	valuep = (uint8_t **)HASH_ELEM_VALUE(mht, el);
 	*valuep = ebpf_calloc(ebpf_ncpus(), mht->value_size);
 	if (*valuep == NULL)
@@ -102,12 +103,13 @@ percpu_elem_ctor(void *mem, void *arg)
 }
 
 static void
-percpu_elem_dtor(void *mem, void *arg)
+percpu_elem_dtor(ebpf_allocator_entry_t *ae, struct ebpf_obj *eo)
 {
 	uint8_t **valuep;
-	struct hash_elem *el = mem;
-	struct ebpf_map_hashtable *mht = arg;
+	struct hash_elem *el = (struct hash_elem *)ae;
+	struct ebpf_map_hashtable *mht = EO2EMHT(eo);
 
+	ebpf_assert(mht != NULL);
 	valuep = (uint8_t **)HASH_ELEM_VALUE(mht, el);
 	ebpf_free(*valuep);
 }
@@ -116,7 +118,7 @@ static bool
 is_percpu(struct ebpf_map *m)
 {
 
-	return (m->type == EBPF_MAP_TYPE_PERCPU_HASHTABLE) ? true : false;
+	return (m->type == EBPF_MAP_TYPE_PERCPU_HASHTABLE);
 }
 
 static int
@@ -148,10 +150,10 @@ hashtable_map_init(struct ebpf_obj *eo)
 
 	m->percpu = is_percpu(m);
 	if (m->percpu) {
-		mht->elem_size = mht->key_size + sizeof(uint8_t *) +
+		m->elem_size = mht->key_size + sizeof(uint8_t *) +
 				      sizeof(struct hash_elem);
 	} else {
-		mht->elem_size = mht->key_size + mht->value_size +
+		m->elem_size = mht->key_size + mht->value_size +
 				      sizeof(struct hash_elem);
 	}
 
@@ -182,18 +184,25 @@ hashtable_map_init(struct ebpf_obj *eo)
 		BUCKET_LOCK_INIT(mht, i);
 
 	if (m->percpu) {
-		error = ebpf_allocator_init(&mht->allocator,
-					    mht->elem_size, m->max_entries,
-					    percpu_elem_ctor, mht);
-		if (error)
-			goto err2;
+		mht->allocator = (ebpf_allocator_t){
+			.block_size = m->elem_size,
+			.nblocks = m->max_entries,
+			.count = m->max_entries,
+			.ctor = percpu_elem_ctor,
+			.dtor = percpu_elem_dtor,
+		};
 	} else {
-		error = ebpf_allocator_init(
-		    &mht->allocator, mht->elem_size,
-		    m->max_entries + ebpf_ncpus(), NULL, NULL);
-		if (error)
-			goto err2;
+		mht->allocator = (ebpf_allocator_t){
+			.block_size = m->elem_size,
+			.nblocks = m->max_entries + ebpf_ncpus(),
+			.count = m->max_entries + ebpf_ncpus(),
+		};
+	}
+	error = ebpf_allocator_init(&mht->allocator, eo);
+	if (error)
+		goto err2;
 
+	if (!m->percpu) {
 		mht->pcpu_extra_elems =
 		    ebpf_calloc(ebpf_ncpus(), sizeof(struct hash_elem *));
 		if (mht->pcpu_extra_elems == NULL) {
@@ -220,9 +229,7 @@ hashtable_map_init(struct ebpf_obj *eo)
 	return (0);
 
 err3:
-	ebpf_allocator_deinit(&mht->allocator,
-			      m->percpu ? percpu_elem_dtor : NULL,
-			      m->percpu ? mht : NULL);
+	ebpf_allocator_deinit(&mht->allocator, eo);
 err2:
 	for (uint32_t i = 0; i < NBUCKETS(mht); i++)
 		BUCKET_LOCK_DESTROY(mht, i);
@@ -248,7 +255,7 @@ hashtable_map_deinit(struct ebpf_obj *eo, void *arg)
 	    "mht->alloc.count=%u\n",
 	    __func__, mht, &mht->allocator, mht->allocator.count);
 
-	if (m->percpu == false) {
+	if (!m->percpu) {
 		for (uint16_t i = 0; i < ebpf_ncpus(); i++) {
 			EBPF_DPRINTF("%s: alloc free cpu=%u, "
 			    "mht=%p, "
@@ -275,11 +282,7 @@ hashtable_map_deinit(struct ebpf_obj *eo, void *arg)
 			}
 		}
 	}
-
-	EBPF_DPRINTF("%s: pre-deinit\n", __func__);
-	ebpf_allocator_deinit(&mht->allocator,
-			      m->percpu ? percpu_elem_dtor : NULL,
-			      m->percpu ? mht : NULL);
+	ebpf_allocator_deinit(&mht->allocator, eo);
 
 	EBPF_DPRINTF("%s: pre-mtx destroy\n", __func__);
 	for (uint32_t i = 0; i < NBUCKETS(mht); i++)
@@ -288,7 +291,7 @@ hashtable_map_deinit(struct ebpf_obj *eo, void *arg)
 	ebpf_hashdestroy(mht->mht_tbl, mht->mht_mask);
 	ebpf_free(mht->mht_bucketlock);
 
-	if (m->percpu == false)
+	if (!m->percpu)
 		ebpf_free(mht->pcpu_extra_elems);
 }
 
@@ -502,9 +505,8 @@ hashtable_map_delete_elem(struct ebpf_obj *eo, void *key)
 	 * synchronization. This is safe, because ebpf_allocator
 	 * never calls free().
 	 */
-	if (elem) {
+	if (elem)
 		ebpf_allocator_free(&mht->allocator, elem);
-	}
 
 	return 0;
 }

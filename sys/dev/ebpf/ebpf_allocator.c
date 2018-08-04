@@ -19,6 +19,9 @@
 #include <sys/ebpf.h>
 #include "ebpf_allocator.h"
 
+#include <sys/ebpf_obj.h>
+#include "ebpf_map.h"
+
 #define EBPF_ALLOCATOR_ALIGN sizeof(void *)
 
 /*
@@ -28,22 +31,23 @@
  * time.
  */
 
-static int ebpf_allocator_prealloc(ebpf_allocator_t *alloc, uint32_t nblocks,
-				   int (*ctor)(void *, void *), void *arg);
+static int ebpf_allocator_prealloc(ebpf_allocator_t *, struct ebpf_obj *);
 
 int
-ebpf_allocator_init(ebpf_allocator_t *alloc, uint32_t block_size,
-		    uint32_t nblocks, int (*ctor)(void *, void *), void *arg)
+ebpf_allocator_init(ebpf_allocator_t *alloc, struct ebpf_obj *eo)
 {
+	struct ebpf_map *m = EO2EMAP(eo);
+
 	EBPF_DPRINTF("%s: enter\n", __func__);
+	if (m == NULL)
+		return (EINVAL);
 	SLIST_INIT(&alloc->free_block);
 	SLIST_INIT(&alloc->used_segment);
-	alloc->nblocks = nblocks;
-	alloc->block_size = block_size;
-	alloc->count = nblocks;
+	EBPF_DPRINTF("%s: nblocks=%u, block_size=%u, count=%u\n",
+	    __func__, alloc->nblocks, alloc->block_size, alloc->count);
 	ebpf_mtx_spin_init(&alloc->lock, "ebpf_allocator lock");
 	EBPF_DPRINTF("%s: after mtx_init\n", __func__);
-	return ebpf_allocator_prealloc(alloc, nblocks, ctor, arg);
+	return ebpf_allocator_prealloc(alloc, eo);
 }
 
 /*
@@ -53,31 +57,29 @@ ebpf_allocator_init(ebpf_allocator_t *alloc, uint32_t block_size,
  * allocator before calling this function.
  */
 void
-ebpf_allocator_deinit(ebpf_allocator_t *alloc, void (*dtor)(void *, void *),
-		      void *arg)
+ebpf_allocator_deinit(ebpf_allocator_t *alloc, struct ebpf_obj *eo)
 {
-	ebpf_allocator_entry_t *tmp;
+	ebpf_allocator_entry_t *ae;
 
 	ebpf_assert(alloc->count == alloc->nblocks);
 
-	if (dtor) {
-		SLIST_FOREACH(tmp, &alloc->free_block, entry)
-			dtor(tmp, arg);
+	if (alloc->dtor) {
+		SLIST_FOREACH(ae, &alloc->free_block, entry)
+			(*alloc->dtor)(ae, eo);
 	}
 
 	while (!SLIST_EMPTY(&alloc->used_segment)) {
-		tmp = SLIST_FIRST(&alloc->used_segment);
-		if (tmp) {
+		ae = SLIST_FIRST(&alloc->used_segment);
+		if (ae) {
 			SLIST_REMOVE_HEAD(&alloc->used_segment, entry);
-			ebpf_free(tmp);
+			ebpf_free(ae);
 		}
 	}
 	ebpf_mtx_destroy(&alloc->lock);
 }
 
 static int
-ebpf_allocator_prealloc(ebpf_allocator_t *alloc, uint32_t nblocks,
-			int (*ctor)(void *, void *), void *arg)
+ebpf_allocator_prealloc(ebpf_allocator_t *alloc, struct ebpf_obj *eo)
 {
 	uint32_t count = 0;
 	int error = 0;
@@ -114,8 +116,9 @@ ebpf_allocator_prealloc(ebpf_allocator_t *alloc, uint32_t nblocks,
 		}
 
 		do {
-			if (ctor) {
-				error = ctor(data, arg);
+			if (alloc->ctor) {
+				error = (*alloc->ctor)(
+				    (ebpf_allocator_entry_t *)data, eo);
 				if (error)
 					return (error);
 			}
@@ -124,7 +127,7 @@ ebpf_allocator_prealloc(ebpf_allocator_t *alloc, uint32_t nblocks,
 					  entry);
 			data += alloc->block_size;
 			size -= alloc->block_size;
-			if (++count == nblocks)
+			if (++count == alloc->nblocks)
 				goto finish;
 		} while (size > alloc->block_size);
 	}
@@ -139,7 +142,7 @@ ebpf_allocator_alloc(ebpf_allocator_t *alloc)
 {
 	void *ret = NULL;
 
-	EBPF_DPRINTF("%s: enter: alloc %p count=%u\n",
+	EBPF_DPRINTF("%s: enter: %p count=%u\n",
 	    __func__, alloc, alloc->count);
 	EBPF_DPRINTF("%s: wait lock: %p\n", __func__, &alloc->lock);
 	ebpf_mtx_lock_spin(&alloc->lock);
@@ -157,6 +160,8 @@ ebpf_allocator_alloc(ebpf_allocator_t *alloc)
 void
 ebpf_allocator_free(ebpf_allocator_t *alloc, void *ptr)
 {
+	EBPF_DPRINTF("%s: enter: %p count=%u\n",
+	    __func__, alloc, alloc->count);
 	EBPF_DPRINTF("%s: enter. wait lock: %p\n", __func__, &alloc->lock);
 	ebpf_mtx_lock_spin(&alloc->lock);
 	SLIST_INSERT_HEAD(&alloc->free_block, (ebpf_allocator_entry_t *)ptr,

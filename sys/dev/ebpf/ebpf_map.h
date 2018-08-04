@@ -66,6 +66,7 @@ struct ebpf_map_ops {
 
 struct ebpf_map {
 	uint16_t type;
+	uint32_t elem_size;
 	uint32_t key_size;
 	uint32_t value_size;
 	uint32_t map_flags;

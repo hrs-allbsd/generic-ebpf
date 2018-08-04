@@ -31,7 +31,6 @@ struct hash_elem {
 
 struct ebpf_map_hashtable {
 	struct ebpf_map	m;
-	uint32_t elem_size;
 	uint32_t key_size;	/* round-up */
 	uint32_t value_size;	/* round-up */
 	uint32_t nbuckets;
