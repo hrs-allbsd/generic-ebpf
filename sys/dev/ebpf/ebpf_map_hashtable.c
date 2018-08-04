@@ -21,10 +21,16 @@
 #include "ebpf_util.h"
 #include "ebpf_map_hashtable.h"
 
+/* Macros for hash access. */
+/* Get a bucket index from hash. */
 #define	MHTBUCKET(mht, hash)	((u_long)((hash) & (mht)->mht_mask))
+/* Get a hash from key. */
 #define	MHTHASH(key, len)	ebpf_jenkins_hash(key, len, 0)
+/* Get a list-head of bucket from hash. */
 #define	MHTHASHHEAD(mht, hash)	((mht)->mht_tbl[MHTBUCKET(mht, hash)])
+/* Get the number of buckets. */
 #define	NBUCKETS(mht)	((mht)->mht_mask + 1)
+
 #define	BUCKET_LOCK_INIT(mht, i) \
 	ebpf_mtx_spin_init(&mht->mht_bucketlock[i], \
 	    "eBPF hashtable map bucket lock")
@@ -39,7 +45,8 @@
 #define	BUCKET_UNLOCK_HASH(mht, hash) \
 	BUCKET_UNLOCK(mht, (hash)&(mht)->mht_mask)
 
-#define HASH_ELEM_VALUE(_hash_mapp, _elemp) ((_elemp)->key + (_hash_mapp)->key_size)
+#define HASH_ELEM_VALUE(_hash_mapp, _elemp) \
+	((_elemp)->key + (_hash_mapp)->key_size)
 #define HASH_ELEM_PERCPU_VALUE(_hash_mapp, _elemp, _cpuid)                     \
 	(*((uint8_t **)HASH_ELEM_VALUE(_hash_mapp, _elemp)) +                  \
 	 (_hash_mapp)->value_size * (_cpuid))
