@@ -120,11 +120,12 @@ array_map_lookup_elem0(struct ebpf_obj *eo, void *key, void *value)
 	uint32_t k;
 	void *b;
 
-	if (m == NULL || key == NULL)
-		return (NULL);
+	ebpf_assert(eo != NULL);
+	ebpf_assert(key != NULL);
+
 	k = *(uint32_t *)key;
-	if (k >= m->max_entries)
-		return (NULL);
+	ebpf_assert(k < m->max_entries);
+
 	if (m->percpu) {
 		b = BASE_PTR_PERCPU(m, ebpf_curcpu());
 		if (value != NULL) {
@@ -152,6 +153,14 @@ array_map_lookup_elem0(struct ebpf_obj *eo, void *key, void *value)
 static void *
 array_map_lookup_elem(struct ebpf_obj *eo, void *key)
 {
+	struct ebpf_map *m = EO2EMAP(eo);
+	uint32_t k;
+
+	if (eo == NULL || key == NULL)
+		return (NULL);
+	k = *(uint32_t *)key;
+	if (k >= m->max_entries)
+		return (NULL);
 
 	return array_map_lookup_elem0(eo, key, NULL);
 }
@@ -160,7 +169,15 @@ static int
 array_map_lookup_elem_from_user(struct ebpf_obj *eo, void *key,
     void *value)
 {
+	struct ebpf_map *m = EO2EMAP(eo);
+	uint32_t k;
 	void *v;
+
+	if (eo == NULL || key == NULL)
+		return (EINVAL);
+	k = *(uint32_t *)key;
+	if (k >= m->max_entries)
+		return (EINVAL);
 
 	v = array_map_lookup_elem0(eo, key, value);
 
