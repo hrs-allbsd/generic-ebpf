@@ -114,7 +114,7 @@ err0:
 }
 
 static void *
-array_map_lookup_elem(struct ebpf_obj *eo, void *key)
+array_map_lookup_elem0(struct ebpf_obj *eo, void *key, void *value)
 {
 	struct ebpf_map *m = EO2EMAP(eo);
 	uint32_t k;
@@ -125,50 +125,46 @@ array_map_lookup_elem(struct ebpf_obj *eo, void *key)
 	k = *(uint32_t *)key;
 	if (k >= m->max_entries)
 		return (NULL);
-	if (m->percpu)
+	if (m->percpu) {
 		b = BASE_PTR_PERCPU(m, ebpf_curcpu());
-	else
+		if (value != NULL) {
+			/* From Userland. */
+			uint8_t *v, *v0 = (uint8_t *)value;
+
+			for (uint16_t c = 0; c < ebpf_ncpus(); c++) {
+				v = v0 + m->value_size * c;
+				memcpy(v, SLOT_PTR(m, b, k), m->value_size);
+			}
+		} else {
+			/* In kernel. */
+			b = BASE_PTR_PERCPU(m, ebpf_curcpu());
+		}
+	} else {
 		b = BASE_PTR(m);
+		if (value != NULL)
+			memcpy(value, SLOT_PTR(m, b, k), m->value_size);
+	}
 	EBPF_DPRINTF("%s: slot=%u, value=%u\n", __func__,
 	    *(uint32_t *)key, *(uint32_t *)SLOT_PTR(m, b, k));
 	return SLOT_PTR(m, b, k);
+}
+
+static void *
+array_map_lookup_elem(struct ebpf_obj *eo, void *key)
+{
+
+	return array_map_lookup_elem0(eo, key, NULL);
 }
 
 static int
 array_map_lookup_elem_from_user(struct ebpf_obj *eo, void *key,
     void *value)
 {
-	struct ebpf_map *m = EO2EMAP(eo);
-	uint32_t k;
-	void *elem;
+	void *v;
 
-	if (m == NULL || key == NULL)
-		return (EINVAL);
-	k = *(uint32_t *)key;
-	if (k >= m->max_entries)
-		return (EINVAL);
-	elem = array_map_lookup_elem(eo, key);
-	if (elem == NULL)
-		return (ENOENT);
-	if (m->percpu) {
-		uint8_t *v, *v0 = (uint8_t *)value;
+	v = array_map_lookup_elem0(eo, key, value);
 
-		for (uint16_t c = 0; c < ebpf_ncpus(); c++) {
-			v = v0 + m->value_size * c;
-			memcpy(v, elem, m->value_size);
-		}
-	} else
-		memcpy(value, elem, m->value_size);
-
-	return (0);
-}
-
-static int
-array_map_lookup_elem_percpu_from_user(struct ebpf_obj *eo, void *key,
-				       void *value)
-{
-
-	return array_map_lookup_elem_from_user(eo, key, value);
+	return (v == NULL) ? ENOENT : 0;
 }
 
 static inline int
@@ -236,16 +232,9 @@ array_map_update_elem(struct ebpf_obj *eo, void *key, void *value,
 
 	return array_map_update_elem0(eo, key, value, flags, 0);
 }
-static int
-array_map_update_elem_percpu(struct ebpf_obj *eo, void *key, void *value,
-		      uint64_t flags)
-{
-
-	return array_map_update_elem0(eo, key, value, flags, 0);
-}
 
 static int
-array_map_update_elem_percpu_from_user(struct ebpf_obj *eo, void *key,
+array_map_update_elem_from_user(struct ebpf_obj *eo, void *key,
 				       void *value, uint64_t flags)
 {
 
@@ -293,11 +282,11 @@ struct ebpf_map_ops array_map_ops = {
 
 struct ebpf_map_ops percpu_array_map_ops = {
     .init = array_map_init_percpu,
-    .update_elem = array_map_update_elem_percpu,
+    .update_elem = array_map_update_elem,
     .lookup_elem = array_map_lookup_elem,
     .delete_elem = array_map_delete_elem, // delete is anyway invalid
-    .update_elem_from_user = array_map_update_elem_percpu_from_user,
-    .lookup_elem_from_user = array_map_lookup_elem_percpu_from_user,
+    .update_elem_from_user = array_map_update_elem_from_user,
+    .lookup_elem_from_user = array_map_lookup_elem_from_user,
     .delete_elem_from_user = array_map_delete_elem, // delete is anyway invalid
     .get_next_key_from_user = array_map_get_next_key,
     .deinit = array_map_deinit_percpu,
