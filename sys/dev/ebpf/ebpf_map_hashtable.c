@@ -54,19 +54,20 @@ get_hash_elem(struct ebpf_map_hashtable *mht, void *key)
 
 	EBPF_EPOCH_LIST_FOREACH(el, &MHTHASHHEAD(mht, hash), el_hash) {
 		if (memcmp(el->key, key, mht->key_size) == 0)
-			return el;
+			return (el);
 	}
-	return NULL;
+	return (NULL);
 }
 
 static struct hash_elem *
 get_extra_elem(struct ebpf_map_hashtable *mht, struct hash_elem *el)
 {
-	struct hash_elem *tmp;
+	struct hash_elem *el0;
 
-	tmp = mht->pcpu_extra_elems[ebpf_curcpu()];
+	el0 = mht->pcpu_extra_elems[ebpf_curcpu()];
 	mht->pcpu_extra_elems[ebpf_curcpu()] = el;
-	return tmp;
+
+	return (el0);
 }
 
 static int
@@ -75,16 +76,14 @@ check_update_flags(struct ebpf_map_hashtable *mht, struct hash_elem *el,
 {
 
 	if (el) {
-		if (flags & EBPF_NOEXIST) {
-			return EEXIST;
-		}
+		if (flags & EBPF_NOEXIST)
+			return (EEXIST);
 	} else {
-		if (flags & EBPF_EXIST) {
-			return ENOENT;
-		}
+		if (flags & EBPF_EXIST)
+			return (ENOENT);
 	}
 
-	return 0;
+	return (0);
 }
 
 static int
@@ -96,9 +95,8 @@ percpu_elem_ctor(void *mem, void *arg)
 
 	valuep = (uint8_t **)HASH_ELEM_VALUE(mht, el);
 	*valuep = ebpf_calloc(ebpf_ncpus(), mht->value_size);
-	if (*valuep == NULL) {
-		return ENOMEM;
-	}
+	if (*valuep == NULL)
+		return (ENOMEM);
 
 	return 0;
 }
@@ -117,10 +115,8 @@ percpu_elem_dtor(void *mem, void *arg)
 static bool
 is_percpu(struct ebpf_map *m)
 {
-	if (m->type == EBPF_MAP_TYPE_PERCPU_HASHTABLE) {
-		return true;
-	}
-	return false;
+
+	return (m->type == EBPF_MAP_TYPE_PERCPU_HASHTABLE) ? true : false;
 }
 
 static int
@@ -189,16 +185,14 @@ hashtable_map_init(struct ebpf_obj *eo)
 		error = ebpf_allocator_init(&mht->allocator,
 					    mht->elem_size, m->max_entries,
 					    percpu_elem_ctor, mht);
-		if (error) {
+		if (error)
 			goto err2;
-		}
 	} else {
 		error = ebpf_allocator_init(
 		    &mht->allocator, mht->elem_size,
 		    m->max_entries + ebpf_ncpus(), NULL, NULL);
-		if (error) {
+		if (error)
 			goto err2;
-		}
 
 		mht->pcpu_extra_elems =
 		    ebpf_calloc(ebpf_ncpus(), sizeof(struct hash_elem *));
@@ -223,7 +217,7 @@ hashtable_map_init(struct ebpf_obj *eo)
 	EBPF_DPRINTF("%s: leave m=%p mht->allocator=%p "
 	    "mht->allocator.count=%u\n",
 	    __func__, mht, &mht->allocator, mht->allocator.count);
-	return 0;
+	return (0);
 
 err3:
 	ebpf_allocator_deinit(&mht->allocator,
@@ -236,7 +230,7 @@ err2:
 err1:
 	ebpf_hashdestroy(mht->mht_tbl, mht->mht_mask);
 err0:
-	return error;
+	return (error);
 }
 
 static void
@@ -254,7 +248,7 @@ hashtable_map_deinit(struct ebpf_obj *eo, void *arg)
 	    "mht->alloc.count=%u\n",
 	    __func__, mht, &mht->allocator, mht->allocator.count);
 
-	if (!m->percpu) {
+	if (m->percpu == false) {
 		for (uint16_t i = 0; i < ebpf_ncpus(); i++) {
 			EBPF_DPRINTF("%s: alloc free cpu=%u, "
 			    "mht=%p, "
@@ -294,9 +288,8 @@ hashtable_map_deinit(struct ebpf_obj *eo, void *arg)
 	ebpf_hashdestroy(mht->mht_tbl, mht->mht_mask);
 	ebpf_free(mht->mht_bucketlock);
 
-	if (!m->percpu) {
+	if (m->percpu == false)
 		ebpf_free(mht->pcpu_extra_elems);
-	}
 }
 
 static void *
@@ -372,9 +365,8 @@ hashtable_map_update_elem(struct ebpf_obj *eo, void *key, void *value,
 
 	old_elem = get_hash_elem(mht, key);
 	error = check_update_flags(mht, old_elem, flags);
-	if (error) {
+	if (error)
 		goto err0;
-	}
 
 	if (old_elem) {
 		EBPF_DPRINTF("%s: old_elem = %p\n", __func__, old_elem);
@@ -401,10 +393,8 @@ hashtable_map_update_elem(struct ebpf_obj *eo, void *key, void *value,
 
 	EBPF_EPOCH_LIST_INSERT_HEAD(&MHTHASHHEAD(mht, hash),
 	    new_elem, el_hash);
-	if (old_elem) {
+	if (old_elem)
 		EBPF_EPOCH_LIST_REMOVE(old_elem, el_hash);
-	}
-
 err0:
 	BUCKET_UNLOCK_HASH(mht, hash);
 	EBPF_DPRINTF("%s: leave %p key=%u value=%u\n",
@@ -425,10 +415,8 @@ hashtable_map_update_elem_percpu(struct ebpf_obj *eo, void *key, void *value,
 
 	old_elem = get_hash_elem(mht, key);
 	error = check_update_flags(mht, old_elem, flags);
-	if (error) {
+	if (error)
 		goto err0;
-	}
-
 	if (old_elem) {
 		memcpy(HASH_ELEM_CURCPU_VALUE(mht, old_elem), value,
 		       mht->value_size);
@@ -464,9 +452,8 @@ hashtable_map_update_elem_percpu_from_user(struct ebpf_obj *eo, void *key,
 
 	old_elem = get_hash_elem(mht, key);
 	error = check_update_flags(mht, old_elem, flags);
-	if (error) {
+	if (error)
 		goto err0;
-	}
 
 	if (old_elem) {
 		for (uint16_t i = 0; i < ebpf_ncpus(); i++) {
@@ -478,7 +465,7 @@ hashtable_map_update_elem_percpu_from_user(struct ebpf_obj *eo, void *key,
 		if (!new_elem) {
 			error = EBUSY;
 			goto err0;
-    }
+		}
 
 		for (uint16_t i = 0; i < ebpf_ncpus(); i++) {
 			memcpy(HASH_ELEM_PERCPU_VALUE(mht, new_elem, i),
@@ -505,9 +492,8 @@ hashtable_map_delete_elem(struct ebpf_obj *eo, void *key)
 	BUCKET_LOCK_HASH(mht, hash);
 
 	elem = get_hash_elem(mht, key);
-	if (elem) {
+	if (elem)
 		EBPF_EPOCH_LIST_REMOVE(elem, el_hash);
-	}
 
 	BUCKET_UNLOCK_HASH(mht, hash);
 
@@ -532,9 +518,8 @@ hashtable_map_get_next_key(struct ebpf_obj *eo, void *key, void *next_key)
 
 	EBPF_DPRINTF("%s: enter m=%p next_key=%p\n", __func__, EO2EMAP(eo),
 	    next_key); 
-	if (key == NULL) {
+	if (key == NULL)
 		goto get_first_key;
-	}
 	EBPF_DPRINTF("%s: enter key=%u(%p)\n", __func__, *(uint32_t *)key,
 	    key);
 
@@ -542,9 +527,8 @@ hashtable_map_get_next_key(struct ebpf_obj *eo, void *key, void *next_key)
 	uint32_t hash = MHTHASH(key, mht->key_size);
 	elem = get_hash_elem(mht, key);
 	EBPF_DPRINTF("%s: elem=%p\n", __func__, elem);
-	if (elem == NULL) {
+	if (elem == NULL)
 		goto get_first_key;
-	}
 	EBPF_DPRINTF("%s: bucket=%lu\n", __func__, MHTBUCKET(mht, hash));
 
 	/* Try to get the next key.  If not, try the remaining buckets. */
