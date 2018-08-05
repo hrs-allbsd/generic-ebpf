@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+#include <sys/param.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -103,7 +104,7 @@ resolve_relocations(struct elf_refs *refs)
 			int found =
 			    find_map_entry(discovered_maps, num_maps, symname);
 			if (!found) {
-				if (num_maps != EBPF_PROG_MAX_ATTACHED_MAPS) {
+				if (num_maps != nitems(discovered_maps)) {
 					map_desc = refs->driver->map_create(
 					    refs->driver, map_def->type,
 					    map_def->key_size,

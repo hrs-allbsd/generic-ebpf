@@ -53,7 +53,7 @@ ebpf_obj_prog_dtor(struct ebpf_obj *eo, ebpf_thread_t *td)
 	struct ebpf_prog *ep;
 
 	eop = EO2EOP(eo);
-	for (int i = 0; i < EBPF_PROG_MAX_ATTACHED_MAPS; i++) {
+	for (int i = 0; i < nitems(eop->attached_maps); i++) {
 		if (eop->attached_maps[i]) {
 			ebpf_fdrop(eop->attached_maps[i]->obj.f, td);
 		}
@@ -108,7 +108,7 @@ ebpf_prog_mapfd_to_addr(struct ebpf_obj_prog *eop, ebpf_thread_t *td)
 			goto err1;
 		}
 
-		if (eop->nattached_maps == EBPF_PROG_MAX_ATTACHED_MAPS) {
+		if (eop->nattached_maps == nitems(eop->attached_maps)) {
 			error = E2BIG;
 			goto err1;
 		}
@@ -116,7 +116,7 @@ ebpf_prog_mapfd_to_addr(struct ebpf_obj_prog *eop, ebpf_thread_t *td)
 		cur[0].imm = (uint32_t)eom;
 		cur[1].imm = ((uint64_t)eom) >> 32;
 
-		for (int j = 0; j < EBPF_PROG_MAX_ATTACHED_MAPS; j++) {
+		for (int j = 0; j < nitems(eop->attached_maps); j++) {
 			if (eop->attached_maps[j]) {
 				if (eop->attached_maps[j] == eom) {
 					ebpf_fdrop(f, td);
@@ -136,7 +136,7 @@ ebpf_prog_mapfd_to_addr(struct ebpf_obj_prog *eop, ebpf_thread_t *td)
 err1:
 	ebpf_fdrop(f, td);
 err0:
-	for (int i = 0; i < EBPF_PROG_MAX_ATTACHED_MAPS; i++) {
+	for (int i = 0; i < nitems(eop->attached_maps); i++) {
 		if (eop->attached_maps[i]) {
 			ebpf_fdrop(f, td);
 			eop->attached_maps[i] = NULL;
