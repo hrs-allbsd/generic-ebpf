@@ -1,8 +1,7 @@
 /*-
  * SPDX-License-Identifier: Apache License 2.0
  *
- * Copyright 2015 Big Switch Networks, Inc
- * Copyright 2017-2018 Yutaro Hayakawa
+ * Copyright 2018 Yutaro Hayakawa
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,30 +16,18 @@
  * limitations under the License.
  */
 
+#include <sys/param.h>
+
 #include "ebpf_platform.h"
 #include "ebpf_internal.h"
+#include <sys/ebpf_vm_isa.h>
 
 struct ebpf_vm *
 ebpf_create(void)
 {
 	struct ebpf_vm *vm = ebpf_calloc(1, sizeof(*vm));
-	if (vm == NULL)
-		goto err0;
 
-	vm->ext_funcs = ebpf_calloc(MAX_EXT_FUNCS, sizeof(*vm->ext_funcs));
-	if (vm->ext_funcs == NULL)
-		goto err1;
-
-	vm->ext_func_names =
-	    ebpf_calloc(MAX_EXT_FUNCS, sizeof(*vm->ext_func_names));
-	if (vm->ext_func_names == NULL)
-		goto err1;
-
-	return vm;
-err1:
-	ebpf_destroy(vm);
-err0:
-	return (NULL);
+	return (vm);
 }
 
 void
@@ -51,8 +38,6 @@ ebpf_destroy(struct ebpf_vm *vm)
 
 	ebpf_exfree(vm->jitted, vm->jitted_size);
 	ebpf_free(vm->insts);
-	ebpf_free(vm->ext_funcs);
-	ebpf_free(vm->ext_func_names);
 	ebpf_free(vm);
 }
 
@@ -65,7 +50,9 @@ ebpf_register(struct ebpf_vm *vm, unsigned int idx, const char *name, void *fn)
 	    fn == NULL )
 		return -1;
 
+	EBPF_DPRINTF("%s: ext_funcs[%d] = %p\n", __func__, idx, fn);
 	vm->ext_funcs[idx] = (ext_func)fn;
+	EBPF_DPRINTF("%s: ext_func_names[%d] = %s\n", __func__, idx, name);
 	vm->ext_func_names[idx] = name;
 	return 0;
 }
@@ -73,11 +60,9 @@ ebpf_register(struct ebpf_vm *vm, unsigned int idx, const char *name, void *fn)
 unsigned int
 ebpf_lookup_registered_function(struct ebpf_vm *vm, const char *name)
 {
-	if (!vm || !name) {
+	if (vm == NULL || name == NULL)
 		return -1;
-	}
-
-	for (int i = 0; i < MAX_EXT_FUNCS; i++) {
+	for (int i = 0; i < nitems(vm->ext_funcs); i++) {
 		const char *other = vm->ext_func_names[i];
 
 		if (other && !strcmp(other, name)) {
@@ -128,445 +113,62 @@ ebpf_unload(struct ebpf_vm *vm)
 	vm->jitted_size = 0;
 	ebpf_free(vm->insts);
 	vm->insts = NULL;
+	memset(&vm->state, 0, sizeof(vm->state));
 }
 
-static uint32_t
-uint32(uint64_t x)
-{
-	return x;
-}
-
+#ifdef _KERNEL
 uint64_t
-ebpf_exec(const struct ebpf_vm *vm, void *mem, size_t mem_len)
+ebpf_exec(struct ebpf_vm *vm, void *mem, size_t mem_len)
 {
-	uint16_t pc = 0;
-	const struct ebpf_inst *insts;
-	uint64_t reg[16];
-	uint64_t stack[(STACK_SIZE + 7) / 8];
+	int ret;
 
-	EBPF_DPRINTF("%s: enter ", __func__);
-	if (!vm) {
-		return UINT64_MAX;
-	}
-	EBPF_DPRINTF("\tvm=%p\n", vm);
-
-	if (!vm->insts) {
+	EBPF_DPRINTF("%s: enter\n", __func__);
+	if (vm == NULL)
+		return (UINT64_MAX);
+	if (vm->insts == NULL) {
 		/* Code must be loaded before we can execute */
 		return UINT64_MAX;
 	}
+	vm->state.pc = 0;
+	EBPF_DPRINTF("\tvm=%p\n", vm);
 	EBPF_DPRINTF("\tvm->insts=%p\n", vm);
 	EBPF_DPRINTF("\tmem=%p, mem_len=%zu\n", mem, mem_len);
-
-	insts = vm->insts;
-	reg[1] = (uintptr_t)mem;
-	reg[10] = (uintptr_t)stack + sizeof(stack);
-
-	while (1) {
-		const uint16_t cur_pc = pc;
-		struct ebpf_inst inst = insts[pc++];
-
-		switch (inst.opcode) {
-		case EBPF_OP_ADD_IMM:
-			reg[inst.dst] += inst.imm;
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_ADD_REG:
-			reg[inst.dst] += reg[inst.src];
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_SUB_IMM:
-			reg[inst.dst] -= inst.imm;
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_SUB_REG:
-			reg[inst.dst] -= reg[inst.src];
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_MUL_IMM:
-			reg[inst.dst] *= inst.imm;
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_MUL_REG:
-			reg[inst.dst] *= reg[inst.src];
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_DIV_IMM:
-			reg[inst.dst] =
-			    uint32(reg[inst.dst]) / uint32(inst.imm);
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_DIV_REG:
-			if (reg[inst.src] == 0) {
-				ebpf_error("division by zero at PC %u\n",
-					   cur_pc);
-				return UINT64_MAX;
-			}
-			reg[inst.dst] =
-			    uint32(reg[inst.dst]) / uint32(reg[inst.src]);
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_OR_IMM:
-			reg[inst.dst] |= inst.imm;
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_OR_REG:
-			reg[inst.dst] |= reg[inst.src];
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_AND_IMM:
-			reg[inst.dst] &= inst.imm;
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_AND_REG:
-			reg[inst.dst] &= reg[inst.src];
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_LSH_IMM:
-			reg[inst.dst] <<= inst.imm;
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_LSH_REG:
-			reg[inst.dst] <<= reg[inst.src];
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_RSH_IMM:
-			reg[inst.dst] = uint32(reg[inst.dst]) >> inst.imm;
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_RSH_REG:
-			reg[inst.dst] = uint32(reg[inst.dst]) >> reg[inst.src];
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_NEG:
-			reg[inst.dst] = -reg[inst.dst];
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_MOD_IMM:
-			reg[inst.dst] =
-			    uint32(reg[inst.dst]) % uint32(inst.imm);
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_MOD_REG:
-			if (reg[inst.src] == 0) {
-				ebpf_error("division by zero at PC %u\n",
-					   cur_pc);
-				return UINT64_MAX;
-			}
-			reg[inst.dst] =
-			    uint32(reg[inst.dst]) % uint32(reg[inst.src]);
-			break;
-		case EBPF_OP_XOR_IMM:
-			reg[inst.dst] ^= inst.imm;
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_XOR_REG:
-			reg[inst.dst] ^= reg[inst.src];
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_MOV_IMM:
-			reg[inst.dst] = inst.imm;
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_MOV_REG:
-			reg[inst.dst] = reg[inst.src];
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_ARSH_IMM:
-			reg[inst.dst] = (int32_t)reg[inst.dst] >> inst.imm;
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-		case EBPF_OP_ARSH_REG:
-			reg[inst.dst] =
-			    (int32_t)reg[inst.dst] >> uint32(reg[inst.src]);
-			reg[inst.dst] &= UINT32_MAX;
-			break;
-
-		case EBPF_OP_LE:
-			if (inst.imm == 16) {
-				reg[inst.dst] = htole16(reg[inst.dst]);
-			} else if (inst.imm == 32) {
-				reg[inst.dst] = htole32(reg[inst.dst]);
-			} else if (inst.imm == 64) {
-				reg[inst.dst] = htole64(reg[inst.dst]);
-			}
-			break;
-		case EBPF_OP_BE:
-			if (inst.imm == 16) {
-				reg[inst.dst] = htobe16(reg[inst.dst]);
-			} else if (inst.imm == 32) {
-				reg[inst.dst] = htobe32(reg[inst.dst]);
-			} else if (inst.imm == 64) {
-				reg[inst.dst] = htobe64(reg[inst.dst]);
-			}
-			break;
-
-		case EBPF_OP_ADD64_IMM:
-			reg[inst.dst] += inst.imm;
-			break;
-		case EBPF_OP_ADD64_REG:
-			reg[inst.dst] += reg[inst.src];
-			break;
-		case EBPF_OP_SUB64_IMM:
-			reg[inst.dst] -= inst.imm;
-			break;
-		case EBPF_OP_SUB64_REG:
-			reg[inst.dst] -= reg[inst.src];
-			break;
-		case EBPF_OP_MUL64_IMM:
-			reg[inst.dst] *= inst.imm;
-			break;
-		case EBPF_OP_MUL64_REG:
-			reg[inst.dst] *= reg[inst.src];
-			break;
-		case EBPF_OP_DIV64_IMM:
-			reg[inst.dst] /= inst.imm;
-			break;
-		case EBPF_OP_DIV64_REG:
-			if (reg[inst.src] == 0) {
-				ebpf_error("division by zero at PC %u\n",
-					   cur_pc);
-				return UINT64_MAX;
-			}
-			reg[inst.dst] /= reg[inst.src];
-			break;
-		case EBPF_OP_OR64_IMM:
-			reg[inst.dst] |= inst.imm;
-			break;
-		case EBPF_OP_OR64_REG:
-			reg[inst.dst] |= reg[inst.src];
-			break;
-		case EBPF_OP_AND64_IMM:
-			reg[inst.dst] &= inst.imm;
-			break;
-		case EBPF_OP_AND64_REG:
-			reg[inst.dst] &= reg[inst.src];
-			break;
-		case EBPF_OP_LSH64_IMM:
-			reg[inst.dst] <<= inst.imm;
-			break;
-		case EBPF_OP_LSH64_REG:
-			reg[inst.dst] <<= reg[inst.src];
-			break;
-		case EBPF_OP_RSH64_IMM:
-			reg[inst.dst] >>= inst.imm;
-			break;
-		case EBPF_OP_RSH64_REG:
-			reg[inst.dst] >>= reg[inst.src];
-			break;
-		case EBPF_OP_NEG64:
-			reg[inst.dst] = -reg[inst.dst];
-			break;
-		case EBPF_OP_MOD64_IMM:
-			reg[inst.dst] %= inst.imm;
-			break;
-		case EBPF_OP_MOD64_REG:
-			if (reg[inst.src] == 0) {
-				ebpf_error("division by zero at PC %u\n",
-					   cur_pc);
-				return UINT64_MAX;
-			}
-			reg[inst.dst] %= reg[inst.src];
-			break;
-		case EBPF_OP_XOR64_IMM:
-			reg[inst.dst] ^= inst.imm;
-			break;
-		case EBPF_OP_XOR64_REG:
-			reg[inst.dst] ^= reg[inst.src];
-			break;
-		case EBPF_OP_MOV64_IMM:
-			reg[inst.dst] = inst.imm;
-			break;
-		case EBPF_OP_MOV64_REG:
-			reg[inst.dst] = reg[inst.src];
-			break;
-		case EBPF_OP_ARSH64_IMM:
-			reg[inst.dst] = (int64_t)reg[inst.dst] >> inst.imm;
-			break;
-		case EBPF_OP_ARSH64_REG:
-			reg[inst.dst] = (int64_t)reg[inst.dst] >> reg[inst.src];
-			break;
-
-		case EBPF_OP_LDXW:
-			reg[inst.dst] = *(uint32_t *)(uintptr_t)(reg[inst.src] +
-								 inst.offset);
-			break;
-		case EBPF_OP_LDXH:
-			reg[inst.dst] = *(uint16_t *)(uintptr_t)(reg[inst.src] +
-								 inst.offset);
-			break;
-		case EBPF_OP_LDXB:
-			reg[inst.dst] = *(uint8_t *)(uintptr_t)(reg[inst.src] +
-								inst.offset);
-			break;
-		case EBPF_OP_LDXDW:
-			reg[inst.dst] = *(uint64_t *)(uintptr_t)(reg[inst.src] +
-								 inst.offset);
-			break;
-
-		case EBPF_OP_STW:
-			*(uint32_t *)(uintptr_t)(reg[inst.dst] + inst.offset) =
-			    inst.imm;
-			break;
-		case EBPF_OP_STH:
-			*(uint16_t *)(uintptr_t)(reg[inst.dst] + inst.offset) =
-			    inst.imm;
-			break;
-		case EBPF_OP_STB:
-			*(uint8_t *)(uintptr_t)(reg[inst.dst] + inst.offset) =
-			    inst.imm;
-			break;
-		case EBPF_OP_STDW:
-			*(uint64_t *)(uintptr_t)(reg[inst.dst] + inst.offset) =
-			    inst.imm;
-			break;
-
-		case EBPF_OP_STXW:
-			*(uint32_t *)(uintptr_t)(reg[inst.dst] + inst.offset) =
-			    reg[inst.src];
-			break;
-		case EBPF_OP_STXH:
-			*(uint16_t *)(uintptr_t)(reg[inst.dst] + inst.offset) =
-			    reg[inst.src];
-			break;
-		case EBPF_OP_STXB:
-			*(uint8_t *)(uintptr_t)(reg[inst.dst] + inst.offset) =
-			    reg[inst.src];
-			break;
-		case EBPF_OP_STXDW:
-			*(uint64_t *)(uintptr_t)(reg[inst.dst] + inst.offset) =
-			    reg[inst.src];
-			break;
-
-		case EBPF_OP_LDDW:
-			reg[inst.dst] = (uint32_t)inst.imm |
-					((uint64_t)insts[pc++].imm << 32);
-			break;
-
-		case EBPF_OP_JA:
-			pc += inst.offset;
-			break;
-		case EBPF_OP_JEQ_IMM:
-			if (reg[inst.dst] == inst.imm) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JEQ_REG:
-			if (reg[inst.dst] == reg[inst.src]) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JGT_IMM:
-			if (reg[inst.dst] > (uint32_t)inst.imm) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JGT_REG:
-			if (reg[inst.dst] > reg[inst.src]) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JGE_IMM:
-			if (reg[inst.dst] >= (uint32_t)inst.imm) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JGE_REG:
-			if (reg[inst.dst] >= reg[inst.src]) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JLT_IMM:
-			if (reg[inst.dst] < (uint32_t)inst.imm) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JLT_REG:
-			if (reg[inst.dst] < reg[inst.src]) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JLE_IMM:
-			if (reg[inst.dst] <= (uint32_t)inst.imm) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JLE_REG:
-			if (reg[inst.dst] <= reg[inst.src]) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JSET_IMM:
-			if (reg[inst.dst] & inst.imm) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JSET_REG:
-			if (reg[inst.dst] & reg[inst.src]) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JNE_IMM:
-			if (reg[inst.dst] != inst.imm) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JNE_REG:
-			if (reg[inst.dst] != reg[inst.src]) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JSGT_IMM:
-			if ((int64_t)reg[inst.dst] > inst.imm) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JSGT_REG:
-			if ((int64_t)reg[inst.dst] > (int64_t)reg[inst.src]) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JSGE_IMM:
-			if ((int64_t)reg[inst.dst] >= inst.imm) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JSGE_REG:
-			if ((int64_t)reg[inst.dst] >= (int64_t)reg[inst.src]) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JSLT_IMM:
-			if ((int64_t)reg[inst.dst] < inst.imm) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JSLT_REG:
-			if ((int64_t)reg[inst.dst] < (int64_t)reg[inst.src]) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JSLE_IMM:
-			if ((int64_t)reg[inst.dst] <= inst.imm) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_JSLE_REG:
-			if ((int64_t)reg[inst.dst] <= (int64_t)reg[inst.src]) {
-				pc += inst.offset;
-			}
-			break;
-		case EBPF_OP_EXIT:
-			return reg[0];
-		case EBPF_OP_CALL:
-			reg[0] = vm->ext_funcs[inst.imm](reg[1], reg[2], reg[3],
-							 reg[4], reg[5]);
-			break;
-		default:
-			ebpf_error("Unknown instruction!\n");
-			return UINT64_MAX;
-		}
+#ifdef DEBUG_VERBOSE
+	for (int i = 0; i < nitems(vm->ext_funcs); i++) {
+		EBPF_DPRINTF("%s: ext_func_names[%d] = %s,\n",
+		    __func__, i, vm->ext_func_names[i]);
 	}
-	EBPF_DPRINTF("%s: leave\n", __func__);
+#endif
+	vm->state.reg[1].r64u  = (uintptr_t)mem;
+	vm->state.reg[10].r64u = (uintptr_t)vm->state.stack + 
+	    sizeof(vm->state.stack);
+	ret = 0;
+	do {
+		EBPF_DPRINTF("%s: pc=%d, inst=0x%02x, "
+		    "offset=0x%04x, imm=0x%08x\n", __func__,
+		    vm->state.pc, vm->insts[vm->state.pc].opcode,
+		    vm->insts[vm->state.pc].offset,
+		    vm->insts[vm->state.pc].imm);
+#ifdef DEBUG_VERBOSE
+		for (int i = 0; i < 16; i++) {
+			EBPF_DPRINTF("%s:\treg[%d].r64u=%016lx\n", __func__,
+			    i, vm->state.reg[i].r64u);
+		}
+#endif
+		ret = ebpf_ops[vm->insts[vm->state.pc].opcode](vm,
+		    &vm->insts[vm->state.pc]);
+		EBPF_DPRINTF("%s: ret=%d\n", __func__, ret);
+		vm->state.pc++;
+	} while (ret == 0);
+
+		EBPF_DPRINTF("%s: EXIT\n", __func__);
+#ifdef DEBUG_VERBOSE
+		for (int i = 0; i < 16; i++) {
+			EBPF_DPRINTF("%s:\treg[%d].r64u=%016lx\n", __func__,
+			    i, vm->state.reg[i].r64u);
+		}
+#endif
+	return (vm->state.reg[0].r64u);
 }
 
 uint64_t
@@ -584,3 +186,4 @@ ebpf_exec_jit(const struct ebpf_vm *vm, void *mem, size_t mem_len)
 	}
 	EBPF_DPRINTF("%s: leave\n", __func__);
 }
+#endif

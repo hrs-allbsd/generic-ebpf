@@ -25,6 +25,7 @@
 
 #include <sys/ebpf.h>
 #include <sys/ebpf_vm.h>
+#include <sys/ebpf_inst.h>
 #include <sys/ebpf_dev.h>
 
 static void ebpf_obj_prog_dtor(struct ebpf_obj *, ebpf_thread_t *);

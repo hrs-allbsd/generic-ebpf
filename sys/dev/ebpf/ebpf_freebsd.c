@@ -65,10 +65,10 @@ ebpf_exalloc(size_t size)
 void
 ebpf_exfree(void *mem, size_t size)
 {
-
+#ifdef DEBUG_VERBOSE
 	if (mem != NULL)
 		malloc_count--;
-
+#endif
 	EBPF_DPRINTF("%s: %p(%d)\n", __func__, mem, malloc_count);
 	free(mem, M_EBPFBUF);
 }
@@ -76,9 +76,10 @@ ebpf_exfree(void *mem, size_t size)
 void
 ebpf_free(void *mem)
 {
-
+#ifdef DEBUG_VERBOSE
 	if (mem != NULL)
 		malloc_count--;
+#endif
 
 	EBPF_DPRINTF("%s: %p(%d)\n", __func__, mem, malloc_count);
 	free(mem, M_EBPFBUF);

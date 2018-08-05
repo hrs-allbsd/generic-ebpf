@@ -4,6 +4,7 @@
 #include <string.h>
 #include <assert.h>
 
+#include <sys/ebpf_vm.h>
 #include <sys/ebpf_inst.h>
 #include <sys/ebpf_uapi.h>
 #include <gbpf/gbpf.h>

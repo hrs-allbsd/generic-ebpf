@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include <sys/param.h>
 #include "ebpf_platform.h"
 #include "ebpf_internal.h"
 
@@ -168,7 +169,7 @@ ebpf_validate(const struct ebpf_vm *vm, const struct ebpf_inst *insts,
 			break;
 
 		case EBPF_OP_CALL:
-			if (inst.imm < 0 || inst.imm >= MAX_EXT_FUNCS) {
+			if (inst.imm < 0 || inst.imm >= nitems(vm->ext_funcs)) {
 				ebpf_error("invalid call immediate at PC %d\n",
 					   i);
 				return false;

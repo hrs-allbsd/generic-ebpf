@@ -78,7 +78,7 @@ void ebpf_unload(struct ebpf_vm *vm);
  */
 int ebpf_load_elf(struct ebpf_vm *vm, const void *elf, size_t elf_len);
 
-uint64_t ebpf_exec(const struct ebpf_vm *vm, void *mem, size_t mem_len);
+uint64_t ebpf_exec(struct ebpf_vm *vm, void *mem, size_t mem_len);
 uint64_t ebpf_exec_jit(const struct ebpf_vm *vm, void *mem, size_t mem_len);
 
 ebpf_jit_fn ebpf_compile(struct ebpf_vm *vm);

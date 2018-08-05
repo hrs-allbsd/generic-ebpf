@@ -20,7 +20,8 @@
 
 #include <sys/ebpf.h>
 #include <sys/ebpf_obj.h>
-#include <sys/ebpf_inst.h>
+
+struct ebpf_inst;
 
 struct ebpf_prog {
 	uint16_t type;

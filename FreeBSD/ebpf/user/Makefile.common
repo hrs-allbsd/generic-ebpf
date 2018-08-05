@@ -1,3 +1,4 @@
+BASE=	../../..
 ebpf-src += ebpf_freebsd_user.c
 ebpf-src += ebpf_vm.c
 ebpf-src += ebpf_loader.c
@@ -24,6 +25,9 @@ CFLAGS+=${CPPFLAGS}
 LIBS=	-lpthread
 
 all: libebpf.so
+
+ebpf_vm.o: ${VMISA_H}
+ebpf_verifier.o: ${VMISA_H}
 
 libebpf.so: $(OBJS)
 	$(CC) $(LDFLAGS) -shared -o $@ ${OBJS} ${LIBS}
