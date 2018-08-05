@@ -1,9 +1,27 @@
+# 
+# SPDX-License-Identifier: Apache License 2.0
+#
+# Copyright 2018 Yutaro Hayakawa
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#	http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 function postfunc(name, expr) {
 }
 function prefunc(name, src, dst) {
 	if (name == "DIV" || name == "MOD") {
 		printf("\tif (%s == 0) {\n" \
-		    "\t\tebpf_error(\"division by zero at PC %%u\\n\", vm->state.pc);\n" \
+		    "\t\tebpf_error(\"division by zero at PC %%u\\n\", " \
+		    "vm->state.pc);\n" \
 		    "\t\treturn (-1);\n" \
 		    "\t}\n", src);
 	} else if (name == "LSH" || name == "RSH" || name == "ARSH") {
@@ -52,11 +70,14 @@ function jmpop(name, type, opcode, optype, op, stype, dtype) {
 		printf("\treturn(-2);\n");
 	} else if (name == "CALL") {
 		printf("\tif (vm->ext_funcs[(uint32_t)inst->imm] == NULL) {\n" \
-		    "\t\tebpf_error(\"NULL pointer call at PC %%u\\n\", vm->state.pc);\n" \
+		    "\t\tebpf_error(\"NULL pointer call at PC %%u\\n\", " \
+		    "vm->state.pc);\n" \
 		    "\t\treturn (-1);\n" \
 		    "\t}\n"); \
-		printf("\tvm->state.reg[0].r64 = vm->ext_funcs[(uint32_t)inst->imm](");
-		printf("vm->state.reg[1].r64, vm->state.reg[2].r64, vm->state.reg[3].r64, ");
+		printf("\tvm->state.reg[0].r64 = " \
+		    "vm->ext_funcs[(uint32_t)inst->imm](");
+		printf("vm->state.reg[1].r64, vm->state.reg[2].r64, ")
+		printf("vm->state.reg[3].r64, ");
 		printf("vm->state.reg[4].r64, vm->state.reg[5].r64");
 		printf(");\n");
 		printf("\treturn (0);\n");
@@ -193,6 +214,4 @@ END {
 				ldstop($1, $3, S, CLS[$1] + SIZE[S] + $4,
 				    $5, $6, $7, $8);
 	}
-}
-END {
 }
