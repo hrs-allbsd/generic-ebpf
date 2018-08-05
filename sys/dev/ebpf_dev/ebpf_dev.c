@@ -325,6 +325,14 @@ ebpf_ioc_map_lookup_elem(union ebpf_req *req, ebpf_thread_t *td)
 	if (error) {
 		goto err2;
 	}
+	EBPF_DPRINTF("%s: m->percpu=%d, ncpus=%u, v=%p, req->value=%p\n",
+	    __func__, m->percpu, ncpus, v, req->value);
+#ifdef DEBUG_VERBOSE
+	for (uint32_t i = 0; i < ncpus; i++) {
+		EBPF_DPRINTF("%s:\tvalue[%u] = %u\n", __func__,
+		    i, *((uint32_t *)v + i));
+	}
+#endif
 
 	error = ebpf_copyout(v, (void *)req->value, m->value_size * ncpus);
 err2:

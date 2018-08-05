@@ -54,13 +54,17 @@
 	HASH_ELEM_PERCPU_VALUE(_hash_mapp, _elemp, ebpf_curcpu())
 
 static struct hash_elem *
-get_hash_elem(struct ebpf_map_hashtable *mht, void *key)
+get_hash_elem(struct ebpf_map_hashtable *mht, void *key, uint32_t key_size)
 {
 	struct hash_elem *el;
 	uint32_t hash = MHTHASH(key, mht->key_size);
 
+	/*
+	 * key_size can be shorter than mht->key_size.
+	 * The stored key is 0-padded in mht->key_size long.
+	 */
 	EBPF_EPOCH_LIST_FOREACH(el, &MHTHASHHEAD(mht, hash), el_hash) {
-		if (memcmp(el->key, key, mht->key_size) == 0)
+		if (memcmp(el->key, key, key_size) == 0)
 			return (el);
 	}
 	return (NULL);
@@ -309,20 +313,23 @@ hashtable_map_lookup_elem0(struct ebpf_obj *eo, void *key, void *value)
 	struct ebpf_map *m = EO2EMAP(eo);
 	struct hash_elem *elem;
 
-	elem = get_hash_elem(mht, key);
+	EBPF_DPRINTF("%s: enter: value=%p\n", __func__, value);
+
+	elem = get_hash_elem(mht, key, m->key_size);
 	if (elem == NULL)
 		return NULL;
 
-	/* XXX: Use m->value_size instead of mht->value_size. */
+	EBPF_DPRINTF("%s: elem found: %p\n", __func__, elem);
 	if (m->percpu) {
 		if (value != NULL) {
 			for (uint16_t i = 0; i < ebpf_ncpus(); i++) {
-				EBPF_DPRINTF("%s: memcpy: %p -> %p (len=%u)\n",
+				EBPF_DPRINTF("%s: memcpy: value=%u(%p) -> %p (len=%u)\n",
 				    __func__,
+				    *(uint32_t *)HASH_ELEM_PERCPU_VALUE(mht, elem, i),
 				    HASH_ELEM_PERCPU_VALUE(mht, elem, i),
-				    (uint8_t *)value + mht->value_size * i,
+				    (uint8_t *)value + m->value_size * i,
 				    m->value_size);
-				memcpy((uint8_t *)value + mht->value_size * i,
+				memcpy((uint8_t *)value + m->value_size * i,
 				    HASH_ELEM_PERCPU_VALUE(mht, elem, i),
 				    m->value_size);
 			}
@@ -330,8 +337,10 @@ hashtable_map_lookup_elem0(struct ebpf_obj *eo, void *key, void *value)
 		return HASH_ELEM_CURCPU_VALUE(mht, elem);
 	} else {
 		if (value != NULL) {
-				EBPF_DPRINTF("%s: memcpy: %p -> %p (len=%u)\n",
-				    __func__, HASH_ELEM_VALUE(mht, elem),
+				EBPF_DPRINTF("%s: memcpy: value=%u(%p) -> %p (len=%u)\n",
+				    __func__,
+				    *(uint32_t *)HASH_ELEM_VALUE(mht, elem),
+				    HASH_ELEM_VALUE(mht, elem),
 				    value, m->value_size);
 			memcpy(value, HASH_ELEM_VALUE(mht, elem),
 			    m->value_size);
@@ -362,6 +371,7 @@ hashtable_map_update_elem(struct ebpf_obj *eo, void *key, void *value,
 			  uint64_t flags)
 {
 	struct ebpf_map_hashtable *mht = EO2EMHT(eo);
+	struct ebpf_map *m = EO2EMAP(eo);
 	struct hash_elem *old_elem, *new_elem;
 	uint32_t hash = MHTHASH(key, mht->key_size);
 	int error = 0;
@@ -371,7 +381,7 @@ hashtable_map_update_elem(struct ebpf_obj *eo, void *key, void *value,
 	    mht->allocator.count);
 	BUCKET_LOCK_HASH(mht, hash);
 
-	old_elem = get_hash_elem(mht, key);
+	old_elem = get_hash_elem(mht, key, m->key_size);
 	error = check_update_flags(mht, old_elem, flags);
 	if (error)
 		goto err0;
@@ -395,9 +405,14 @@ hashtable_map_update_elem(struct ebpf_obj *eo, void *key, void *value,
 		    __func__, new_elem, *(uint32_t *)key,
 		    *(uint32_t *)value, MHTBUCKET(mht, hash));
 	}
-
-	memcpy(new_elem->key, key, mht->key_size);
-	memcpy(HASH_ELEM_VALUE(mht, new_elem), value, mht->value_size);
+	/*
+	 * Clear the buffer in mht->{key,value}_size long in advance because
+	 * m->{key,value}_size can be shorter than mht->{key,value}_size.
+	 */
+	memset(new_elem->key, 0, mht->key_size);
+	memcpy(new_elem->key, key, m->key_size);
+	memset(HASH_ELEM_VALUE(mht, new_elem), 0, mht->value_size);
+	memcpy(HASH_ELEM_VALUE(mht, new_elem), value, m->value_size);
 
 	EBPF_EPOCH_LIST_INSERT_HEAD(&MHTHASHHEAD(mht, hash),
 	    new_elem, el_hash);
@@ -415,35 +430,49 @@ hashtable_map_update_elem_percpu(struct ebpf_obj *eo, void *key, void *value,
 				 uint64_t flags)
 {
 	struct ebpf_map_hashtable *mht = EO2EMHT(eo);
+	struct ebpf_map *m = EO2EMAP(eo);
 	struct hash_elem *old_elem, *new_elem;
 	uint32_t hash = MHTHASH(key, mht->key_size);
 	int error = 0;
 
+	EBPF_DPRINTF("%s: enter %p key=%u value=%u mht->allocator.count=%u\n",
+	    __func__, EO2EMAP(eo), *(uint32_t *)key, *(uint32_t *)value,
+	    mht->allocator.count);
 	BUCKET_LOCK_HASH(mht, hash);
 
-	old_elem = get_hash_elem(mht, key);
+	old_elem = get_hash_elem(mht, key, m->key_size);
 	error = check_update_flags(mht, old_elem, flags);
 	if (error)
 		goto err0;
 	if (old_elem) {
+		EBPF_DPRINTF("%s: old_elem = %p\n", __func__, old_elem);
+
+		memset(HASH_ELEM_CURCPU_VALUE(mht, old_elem), 0,
+		    mht->value_size);
 		memcpy(HASH_ELEM_CURCPU_VALUE(mht, old_elem), value,
-		       mht->value_size);
+		       m->value_size);
 	} else {
+		EBPF_DPRINTF("%s: new\n", __func__);
 		new_elem = ebpf_allocator_alloc(&mht->allocator);
 		if (!new_elem) {
 			error = EBUSY;
 			goto err0;
 		}
 
+		memset(new_elem->key, 0, mht->key_size);
 		memcpy(new_elem->key, key, mht->key_size);
+		memset(HASH_ELEM_CURCPU_VALUE(mht, new_elem), 0,
+		    mht->value_size);
 		memcpy(HASH_ELEM_CURCPU_VALUE(mht, new_elem), value,
-		       mht->value_size);
+		       m->value_size);
 		EBPF_EPOCH_LIST_INSERT_HEAD(&MHTHASHHEAD(mht, hash),
 		    new_elem, el_hash);
 	}
 
 err0:
 	BUCKET_UNLOCK(mht, hash);
+	EBPF_DPRINTF("%s: leave %p key=%u value=%u\n",
+	    __func__, EO2EMAP(eo), *(uint32_t *)key, *(uint32_t *)value);
 	return error;
 }
 
@@ -452,23 +481,36 @@ hashtable_map_update_elem_percpu_from_user(struct ebpf_obj *eo, void *key,
 					   void *value, uint64_t flags)
 {
 	struct ebpf_map_hashtable *mht = EO2EMHT(eo);
+	struct ebpf_map *m = EO2EMAP(eo);
 	struct hash_elem *old_elem, *new_elem;
 	uint32_t hash = MHTHASH(key, mht->key_size);
 	int error = 0;
 
+	EBPF_DPRINTF("%s: enter %p key=%u value=%u mht->allocator.count=%u\n",
+	    __func__, EO2EMAP(eo), *(uint32_t *)key, *(uint32_t *)value,
+	    mht->allocator.count);
 	BUCKET_LOCK_HASH(mht, hash);
 
-	old_elem = get_hash_elem(mht, key);
+	old_elem = get_hash_elem(mht, key, m->key_size);
 	error = check_update_flags(mht, old_elem, flags);
 	if (error)
 		goto err0;
 
 	if (old_elem) {
+		EBPF_DPRINTF("%s: old_elem = %p\n", __func__, old_elem);
+
 		for (uint16_t i = 0; i < ebpf_ncpus(); i++) {
+			EBPF_DPRINTF("%s: memcpy(%d) %p <- value=%u\n",
+			    __func__, i,
+			    HASH_ELEM_PERCPU_VALUE(mht, old_elem, i),
+			    *(uint32_t *)value);
+			memset(HASH_ELEM_PERCPU_VALUE(mht, old_elem, i), 0,
+			    mht->value_size);
 			memcpy(HASH_ELEM_PERCPU_VALUE(mht, old_elem, i),
-			       value, mht->value_size);
+			    value, m->value_size);
 		}
 	} else {
+		EBPF_DPRINTF("%s: new\n", __func__);
 		new_elem = ebpf_allocator_alloc(&mht->allocator);
 		if (!new_elem) {
 			error = EBUSY;
@@ -476,17 +518,33 @@ hashtable_map_update_elem_percpu_from_user(struct ebpf_obj *eo, void *key,
 		}
 
 		for (uint16_t i = 0; i < ebpf_ncpus(); i++) {
+			EBPF_DPRINTF("%s: memcpy(%d) %p(len=%u) <- value=%u(len=%u)\n",
+			    __func__, i,
+			    HASH_ELEM_PERCPU_VALUE(mht, new_elem, i),
+			    mht->value_size,
+			    *(uint32_t *)value,
+			    m->value_size);
+			memset(HASH_ELEM_PERCPU_VALUE(mht, new_elem, i), 0,
+			    mht->value_size);
 			memcpy(HASH_ELEM_PERCPU_VALUE(mht, new_elem, i),
-			       value, mht->value_size);
+			    value, m->value_size);
+			EBPF_DPRINTF("%s: value64=%lu, value32=%u\n",
+			    __func__,
+			    *(uint64_t *)HASH_ELEM_PERCPU_VALUE(mht, new_elem, i),
+			    *(uint32_t *)HASH_ELEM_PERCPU_VALUE(mht, new_elem, i));
 		}
-
-		memcpy(new_elem->key, key, mht->key_size);
+		EBPF_DPRINTF("%s: key_size: m->%u mht->%u\n", __func__,
+		    m->key_size, mht->key_size);
+		memset(new_elem->key, 0, mht->key_size);
+		memcpy(new_elem->key, key, m->key_size);
 		EBPF_EPOCH_LIST_INSERT_HEAD(&MHTHASHHEAD(mht, hash),
 		    new_elem, el_hash);
 	}
 
 err0:
 	BUCKET_UNLOCK_HASH(mht, hash);
+	EBPF_DPRINTF("%s: leave %p key=%u value=%u\n",
+	    __func__, EO2EMAP(eo), *(uint32_t *)key, *(uint32_t *)value);
 	return error;
 }
 
@@ -494,12 +552,13 @@ static int
 hashtable_map_delete_elem(struct ebpf_obj *eo, void *key)
 {
 	struct ebpf_map_hashtable *mht = EO2EMHT(eo);
+	struct ebpf_map *m = EO2EMAP(eo);
 	struct hash_elem *elem;
 	uint32_t hash = MHTHASH(key, mht->key_size);
 
 	BUCKET_LOCK_HASH(mht, hash);
 
-	elem = get_hash_elem(mht, key);
+	elem = get_hash_elem(mht, key, m->key_size);
 	if (elem)
 		EBPF_EPOCH_LIST_REMOVE(elem, el_hash);
 
@@ -520,6 +579,7 @@ static int
 hashtable_map_get_next_key(struct ebpf_obj *eo, void *key, void *next_key)
 {
 	struct ebpf_map_hashtable *mht = EO2EMHT(eo);
+	struct ebpf_map *m = EO2EMAP(eo);
 	struct hash_elem *elem, *next_elem;
 	uint32_t i = 0;
 
@@ -532,7 +592,7 @@ hashtable_map_get_next_key(struct ebpf_obj *eo, void *key, void *next_key)
 
 	/* Try to get the specified key.  If not exist, get smallest one. */
 	uint32_t hash = MHTHASH(key, mht->key_size);
-	elem = get_hash_elem(mht, key);
+	elem = get_hash_elem(mht, key, m->key_size);
 	EBPF_DPRINTF("%s: elem=%p\n", __func__, elem);
 	if (elem == NULL)
 		goto get_first_key;
@@ -542,7 +602,7 @@ hashtable_map_get_next_key(struct ebpf_obj *eo, void *key, void *next_key)
 	next_elem = EBPF_EPOCH_LIST_NEXT(elem, el_hash);
 	EBPF_DPRINTF("%s: next_elem=%p\n", __func__, next_elem);
 	if (next_elem != NULL) {
-		memcpy(next_key, next_elem->key, mht->key_size);
+		memcpy(next_key, next_elem->key, m->key_size);
 		return 0;
 	}
 	i = MHTBUCKET(mht, hash) + 1;
@@ -552,7 +612,7 @@ get_first_key:
 	for (; i < NBUCKETS(mht); i++) {
 		EBPF_DPRINTF("%s: i=%u get_first_key\n", __func__, i);
 		EBPF_EPOCH_LIST_FOREACH(next_elem, &mht->mht_tbl[i], el_hash) {
-			memcpy(next_key, next_elem->key, mht->key_size);
+			memcpy(next_key, next_elem->key, m->key_size);
 			return 0;
 		}
 	}
