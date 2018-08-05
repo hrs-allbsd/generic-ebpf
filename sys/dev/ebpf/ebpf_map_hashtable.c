@@ -320,9 +320,9 @@ hashtable_map_lookup_elem0(struct ebpf_obj *eo, void *key, void *value)
 				EBPF_DPRINTF("%s: memcpy: %p -> %p (len=%u)\n",
 				    __func__,
 				    HASH_ELEM_PERCPU_VALUE(mht, elem, i),
-				    (uint8_t *)value + m->value_size * i,
+				    (uint8_t *)value + mht->value_size * i,
 				    m->value_size);
-				memcpy((uint8_t *)value + m->value_size * i,
+				memcpy((uint8_t *)value + mht->value_size * i,
 				    HASH_ELEM_PERCPU_VALUE(mht, elem, i),
 				    m->value_size);
 			}
@@ -331,10 +331,8 @@ hashtable_map_lookup_elem0(struct ebpf_obj *eo, void *key, void *value)
 	} else {
 		if (value != NULL) {
 				EBPF_DPRINTF("%s: memcpy: %p -> %p (len=%u)\n",
-				    __func__,
-				    HASH_ELEM_VALUE(mht, elem),
-				    value,
-				    m->value_size);
+				    __func__, HASH_ELEM_VALUE(mht, elem),
+				    value, m->value_size);
 			memcpy(value, HASH_ELEM_VALUE(mht, elem),
 			    m->value_size);
 		}
