@@ -1,6 +1,7 @@
 BASE=	../../..
 ebpf-src += ebpf_freebsd_user.c
 ebpf-src += ebpf_vm.c
+ebpf-src += ebpf_vm_isa.c
 ebpf-src += ebpf_loader.c
 ebpf-src += ebpf_verifer.c
 ebpf-src += ebpf_prog.c
