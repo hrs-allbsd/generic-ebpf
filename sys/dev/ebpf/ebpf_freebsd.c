@@ -19,6 +19,8 @@
 #include <sys/ebpf.h>
 #include <dev/ebpf/ebpf_platform.h>
 #include <dev/ebpf/ebpf_map.h>
+#include <sys/ebpf_vm.h>
+#include <sys/ebpf_inst.h>
 
 MALLOC_DECLARE(M_EBPFBUF);
 MALLOC_DEFINE(M_EBPFBUF, "ebpf-buffers", "Buffers for ebpf and its subsystems");
@@ -266,6 +268,18 @@ ebpf_fini(void)
 }
 
 static void
+ebpf_init_vm_ops(void)
+{
+	/* Register "invalid" function to invalid opcodes. */
+	for (int i = 0; i <= EBPF_OP_MAX; i++) {
+		if (ebpf_ops[i] == NULL) {
+			EBPF_DPRINTF("%s: NULL OP: %02x\n", __func__, i);
+			ebpf_ops[i] = ebpf_op_MAX;
+		}
+	}
+}
+
+static void
 ebpf_init_map_types(void)
 {
 	for (uint16_t i = 0; i < __EBPF_MAP_TYPE_MAX; i++) {
@@ -285,6 +299,7 @@ ebpf_init(void)
 {
 	ebpf_epoch = epoch_alloc(0);
 	ebpf_init_map_types();
+	ebpf_init_vm_ops();
 	printf("ebpf loaded\n");
 	return 0;
 }

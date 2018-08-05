@@ -52,7 +52,10 @@ function opdefine(name, type, opcode)
 }
 function opheader(name, type, opcode)
 {
-	printf("static int ebpf_op_%s%s(%s, %s)\n{\n", name,
+
+	printf("%s int ebpf_op_%s%s(%s, %s)",
+	    (name != "MAX") ? "static" : "",
+	    name,
 	    sfx(name, type),
 	    "struct ebpf_vm *vm",
 	    "const struct ebpf_inst *inst");
@@ -63,6 +66,7 @@ function opfooter(name, type, opcode) {
 }
 function jmpop(name, type, opcode, optype, op, stype, dtype) {
 	opheader(name, type, opcode);
+	printf("\n{\n");
 	r = ".r64";
 	sr = r;
 	dr = r;
@@ -100,6 +104,7 @@ function jmpop(name, type, opcode, optype, op, stype, dtype) {
 }
 function aluop(name, type, opcode, optype, op, stype, dtype) {
 	opheader(name, type, opcode);
+	printf("\n{\n");
 	i64 = index(name, "64");
 	r = (i64) ? ".r64" : ".r32";
 
@@ -158,6 +163,7 @@ function aluop(name, type, opcode, optype, op, stype, dtype) {
 }
 function ldstop(ldst, name, type, opcode, optype, op, stype, dtype) {
 	opheader(name, type, opcode);
+	printf("\n{\n");
 
 	dst = "vm->state.reg[inst->dst].r64u";
 	src = "vm->state.reg[inst->src].r64u";
@@ -191,15 +197,26 @@ BEGIN {
 		printf("#include <sys/ebpf_inst.h>\n");
 	} else {
 		printf("#pragma once\n");
-		printf("typedef int (*ebpf_ops_t)(%s, %s);\n", \
-		    "struct ebpf_vm *", \
-		    "const struct ebpf_inst *");
-		printf("extern ebpf_ops_t ebpf_ops[];\n");
+#		printf("typedef int (*ebpf_ops_t)(%s, %s);\n", \
+#		    "struct ebpf_vm *", \
+#		    "const struct ebpf_inst *");
+#		printf("extern ebpf_ops_t ebpf_ops[];\n");
 	}
 	SFX["N"] = "";
 }
 END {
-	if (defineonly == 0) {
+	if (defineonly) {
+		opdefine("MAX", "", 255);
+		opheader("MAX", "", 255);
+		printf(";");
+	} else {
+		opheader("MAX", "", 255);
+		printf("\n{\n");
+		printf("\tebpf_error(\"Invalid instruction at PC %%u\\n\", " \
+		    "vm->state.pc);\n" \
+		    "\treturn (-3);\n");
+		printf("}\n");
+		opfooter("MAX", "", 255);
 		printf("ebpf_ops_t ebpf_ops[] = {\n");
 		for (i = 0; i < l; i++)
 			printf OPINIT[i];

@@ -27,6 +27,9 @@ struct ebpf_vm *
 ebpf_create(void)
 {
 	struct ebpf_vm *vm = ebpf_calloc(1, sizeof(*vm));
+	if (vm == NULL)
+		return (NULL);
+	vm->ebpf_ops = ebpf_ops;
 
 	return (vm);
 }
@@ -154,7 +157,7 @@ ebpf_exec(struct ebpf_vm *vm, void *mem, size_t mem_len)
 			    i, vm->state.reg[i].r64u);
 		}
 #endif
-		ret = ebpf_ops[vm->insts[vm->state.pc].opcode](vm,
+		ret = vm->ebpf_ops[vm->insts[vm->state.pc].opcode](vm,
 		    &vm->insts[vm->state.pc]);
 		EBPF_DPRINTF("%s: ret=%d\n", __func__, ret);
 		vm->state.pc++;

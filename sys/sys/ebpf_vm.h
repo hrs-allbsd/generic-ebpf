@@ -25,9 +25,12 @@
 #define STACK_SIZE 128
 
 struct ebpf_inst;
+struct ebpf_vm;
 typedef uint64_t (*ext_func)(uint64_t, uint64_t, uint64_t,
 			     uint64_t, uint64_t);
 typedef uint64_t (*ebpf_jit_fn)(void *mem, size_t mem_len);
+typedef int (*ebpf_ops_t)(struct ebpf_vm *, const struct ebpf_inst *);
+extern ebpf_ops_t ebpf_ops[];
 
 struct ebpf_vm_state {
 	union {
@@ -46,6 +49,7 @@ struct ebpf_vm {
 	uint16_t num_insts;
 	ebpf_jit_fn jitted;
 	size_t jitted_size;
+	ebpf_ops_t *ebpf_ops;
 	ext_func ext_funcs[MAX_EXT_FUNCS];
 	const char *ext_func_names[MAX_EXT_FUNCS];
 };
