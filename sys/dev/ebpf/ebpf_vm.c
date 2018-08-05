@@ -44,10 +44,8 @@ ebpf_destroy(struct ebpf_vm *vm)
 int
 ebpf_register(struct ebpf_vm *vm, unsigned int idx, const char *name, void *fn)
 {
-	if (vm == NULL ||
-	    idx >= MAX_EXT_FUNCS ||
-	    name == NULL ||
-	    fn == NULL )
+	if (vm == NULL || idx >= nitems(vm->ext_funcs) ||
+	    name == NULL || fn == NULL )
 		return -1;
 
 	EBPF_DPRINTF("%s: ext_funcs[%d] = %p\n", __func__, idx, fn);
