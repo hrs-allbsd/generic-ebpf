@@ -27,6 +27,8 @@ MAPS+=	ebpf_map_bad.c \
 	ebpf_map_array.c \
 	ebpf_map_hashtable.c
 
+CLEANFILES+=	ebpf_vm_isa.c
+
 ebpf_verifier.o: ${VMISA_H}
 ebpf_vm.o: ${VMISA_H}
 
