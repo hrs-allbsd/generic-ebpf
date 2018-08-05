@@ -19,7 +19,8 @@
 
 #include <sys/param.h>
 #include "ebpf_platform.h"
-#include "ebpf_internal.h"
+#include <sys/ebpf_vm.h>
+#include <sys/ebpf_inst.h>
 
 /*
  * Minimum code verification. Don't rely on this.

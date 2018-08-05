@@ -170,7 +170,9 @@ function ldstop(ldst, name, type, opcode, optype, op, stype, dtype) {
 BEGIN {
 	l = 0;
 	if (defineonly == 0) {
-		printf("#include <sys/dev/ebpf/ebpf_internal.h>\n");
+		printf("#include <sys/dev/ebpf/ebpf_platform.h>\n");
+		printf("#include <sys/ebpf_vm.h>\n");
+		printf("#include <sys/ebpf_inst.h>\n");
 	} else {
 		printf("#pragma once\n");
 		printf("typedef int (*ebpf_ops_t)(%s, %s);\n", \

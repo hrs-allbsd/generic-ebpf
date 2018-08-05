@@ -18,7 +18,7 @@
  */
 
 #include "ebpf_platform.h"
-#include "ebpf_internal.h"
+#include <sys/ebpf_vm.h>
 
 #define MAX_SECTIONS 32
 

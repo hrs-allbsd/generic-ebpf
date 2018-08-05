@@ -19,8 +19,9 @@
 #include <sys/param.h>
 
 #include "ebpf_platform.h"
-#include "ebpf_internal.h"
-#include <sys/ebpf_vm_isa.h>
+#include <sys/ebpf.h>
+#include <sys/ebpf_vm.h>
+#include <sys/ebpf_inst.h>
 
 struct ebpf_vm *
 ebpf_create(void)

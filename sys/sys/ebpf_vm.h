@@ -18,10 +18,41 @@
  */
 
 #pragma once
+#include <sys/param.h>
 
-struct ebpf_vm;
+#define MAX_INSTS 65536
+#define MAX_EXT_FUNCS 64
+#define STACK_SIZE 128
 
+struct ebpf_inst;
+typedef uint64_t (*ext_func)(uint64_t, uint64_t, uint64_t,
+			     uint64_t, uint64_t);
 typedef uint64_t (*ebpf_jit_fn)(void *mem, size_t mem_len);
+
+struct ebpf_vm_state {
+	union {
+		int64_t		r64;
+		uint64_t	r64u;
+		int32_t		r32;
+		uint32_t	r32u;
+	} reg[16];
+	uint32_t	stack[(STACK_SIZE + 7) / 8];
+	uint16_t	pc;
+};
+
+struct ebpf_vm {
+	struct ebpf_vm_state state;
+	struct ebpf_inst *insts;
+	uint16_t num_insts;
+	ebpf_jit_fn jitted;
+	size_t jitted_size;
+	ext_func ext_funcs[MAX_EXT_FUNCS];
+	const char *ext_func_names[MAX_EXT_FUNCS];
+};
+unsigned int ebpf_lookup_registered_function(struct ebpf_vm *,
+					     const char *);
+bool ebpf_validate(const struct ebpf_vm *, const struct ebpf_inst *,
+		   uint32_t);
 
 struct ebpf_vm *ebpf_create(void);
 void ebpf_destroy(struct ebpf_vm *vm);
