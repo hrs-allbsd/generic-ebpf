@@ -15,9 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-function postfunc(name, expr) {
+function postfunc(name, expr)
+{
 }
-function prefunc(name, src, dst) {
+function prefunc(name, src, dst)
+{
 	if (name == "DIV" || name == "MOD") {
 		printf("\tif (%s == 0) {\n" \
 		    "\t\tebpf_error(\"division by zero at PC %%u\\n\", " \
@@ -32,22 +34,32 @@ function prefunc(name, src, dst) {
 		    src, dst, dst);
 	}
 }
-function opdefine(name, type, opcode) {
+function sfx(name, type)
+{
+	if (name == "LE" || name == "BE")
+		return "";
+	else
+		return SFX[type];
+}
+function opdefine(name, type, opcode)
+{
 	if (name == "LE")
 		opcode += SRC["I"];
 	if (name == "BE")
 		opcode += SRC["R"];
-	printf("#define\tEBPF_OP_%s%s\t0x%02x\n", name, SFX[type], opcode);
+	printf("#define\tEBPF_OP_%s%s\t0x%02x\n", name,
+	    sfx(name, type), opcode);
 }
-function opheader(name, type, opcode) {
-	printf("static int ebpf_op_%s%s(%s, %s)\n{\n", \
-	    name, SFX[type], \
-	    "struct ebpf_vm *vm", \
+function opheader(name, type, opcode)
+{
+	printf("static int ebpf_op_%s%s(%s, %s)\n{\n", name,
+	    sfx(name, type),
+	    "struct ebpf_vm *vm",
 	    "const struct ebpf_inst *inst");
 }
 function opfooter(name, type, opcode) {
 	OPINIT[l++] = sprintf("\t[EBPF_OP_%s%s] = ebpf_op_%s%s,\n", \
-	    name, SFX[type], name, SFX[type]);
+	    name, sfx(name, type), name, sfx(name, type));
 }
 function jmpop(name, type, opcode, optype, op, stype, dtype) {
 	opheader(name, type, opcode);
@@ -95,7 +107,11 @@ function aluop(name, type, opcode, optype, op, stype, dtype) {
 	dr = (dtype == "u") ? r dtype : r;
 
 	dst = "vm->state.reg[inst->dst]" dr;
-	if (type == "I") src = "inst->imm";
+	if (type == "I") {
+		src = "inst->imm";
+		if (stype == "u")
+			src = "(uint32_t)" src;
+	}
 	if (type == "R") src = "vm->state.reg[inst->src]" sr;
 	if (type == "N") src = "vm->state.reg[inst->src]" sr;
 
@@ -114,7 +130,7 @@ function aluop(name, type, opcode, optype, op, stype, dtype) {
 		printf("\treturn (0);\n");
 		postfunc(sname, dst);
 	} else if (optype == "LE") {
-		opcode += SRC["I"];
+		src = "inst->imm";
 		dst = "vm->state.reg[inst->dst].r64";
 		printf("\tif (%s == 16) {\n", src);
 		printf("\t\t%s = htole16((uint16_t)%s);\n", dst, dst);
@@ -125,7 +141,7 @@ function aluop(name, type, opcode, optype, op, stype, dtype) {
 		printf("\t}\n");
 		printf("\treturn (0);\n");
 	} else if (optype == "BE") {
-		opcode += SRC["R"];
+		src = "inst->imm";
 		dst = "vm->state.reg[inst->dst].r64";
 		printf("\tif (%s == 16) {\n", src);
 		printf("\t\t%s = htobe16((uint16_t)%s);\n", dst, dst);

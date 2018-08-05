@@ -20,7 +20,7 @@ SIZE	D	0x18	DW
 ALU	IR	ADD	0x00	B	+	s	s
 ALU	IR	SUB	0x10	B	-	s	s
 ALU	IR	MUL	0x20	B	*	s	s
-ALU	IR	DIV	0x30	B	/	s	s
+ALU	IR	DIV	0x30	B	/	u	u
 ALU	IR	OR	0x40	B	|	s	s
 ALU	IR	AND	0x50	B	&	s	s
 ALU	IR	LSH	0x60	B	<<	u	u
@@ -30,8 +30,8 @@ ALU	IR	MOD	0x90	B	%	u	u
 ALU	IR	XOR	0xa0	B	^	s	s
 ALU	IR	MOV	0xb0	U	+	s	s
 ALU	IR	ARSH	0xc0	B	>>	s	s
-ALU	N	LE	0xd0	LE
-ALU	N	BE	0xd0	BE
+ALU	I	LE	0xd0	LE
+ALU	R	BE	0xd0	BE
 
 ALU64	IR	ADD64	0x00	B	+	s	s
 ALU64	IR	SUB64	0x10	B	-	s	s
