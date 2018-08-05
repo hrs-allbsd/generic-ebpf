@@ -36,7 +36,8 @@ libebpf.so: $(OBJS)
 install:
 	cp libebpf.so $(DESTDIR)
 
-CLEANFILES=	libebpf.so ${OBJS}
+CLEANFILES+=	libebpf.so ${OBJS}
+CLEANFILES+=	ebpf_vm_isa.c
 
 .PATH:	${BASE}/sys/dev/ebpf ${BASE}/sys/${MACHINE}/${MACHINE_ARCH}
 VPATH=	${BASE}/sys/dev/ebpf ${BASE}/sys/${MACHINE}/${MACHINE_ARCH}
