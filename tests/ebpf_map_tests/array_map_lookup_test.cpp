@@ -28,11 +28,12 @@ class ArrayMapLookupTest : public ::testing::Test {
 		*m = (struct ebpf_map){
 			.type = EBPF_MAP_TYPE_ARRAY,
 			.key_size = sizeof(uint32_t),
-			.value_size = sizeof(uint32_t),
+			.value_size = sizeof(uint64_t),
 			.max_entries = 100,
 			.map_flags = 0,
 		};
-		uint32_t gkey = 50, gval = 100;
+		uint32_t gkey = 50;
+		uint64_t gval = 100;
 
 		error = ebpf_map_init(eo);
 		ASSERT_TRUE(!error);
@@ -52,7 +53,7 @@ TEST_F(ArrayMapLookupTest, LookupMaxEntryPlusOne)
 {
 	int error;
 	uint32_t key = 100;
-	uint32_t value;
+	uint64_t value;
 
 	error = ebpf_map_lookup_elem_from_user(eo, &key, &value);
 
@@ -63,7 +64,7 @@ TEST_F(ArrayMapLookupTest, LookupOutOfMaxEntry)
 {
 	int error;
 	uint32_t key = 102;
-	uint32_t value;
+	uint64_t value;
 
 	error = ebpf_map_lookup_elem_from_user(eo, &key, &value);
 
@@ -74,7 +75,7 @@ TEST_F(ArrayMapLookupTest, CorrectLookup)
 {
 	int error;
 	uint32_t key = 50;
-	uint32_t value;
+	uint64_t value;
 
 	error = ebpf_map_lookup_elem_from_user(eo, &key, &value);
 
