@@ -118,7 +118,6 @@ ebpf_unload(struct ebpf_vm *vm)
 	memset(&vm->state, 0, sizeof(vm->state));
 }
 
-#ifdef _KERNEL
 uint64_t
 ebpf_exec(struct ebpf_vm *vm, void *mem, size_t mem_len)
 {
@@ -188,4 +187,3 @@ ebpf_exec_jit(const struct ebpf_vm *vm, void *mem, size_t mem_len)
 	}
 	EBPF_DPRINTF("%s: leave\n", __func__);
 }
-#endif
